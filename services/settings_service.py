@@ -49,3 +49,8 @@ class SettingsService:
     def set(self, key: str, value):
         self.settings[key] = value
         self._save_settings(self.settings)
+
+    def reset_defaults(self):
+        self.settings = dict(self.DEFAULT_SETTINGS)
+        self._save_settings(self.settings)
+        return self.settings
