@@ -133,12 +133,10 @@ class TranslationPopup(QWidget):
         self.setGeometry(pos_x, pos_y, width, height)
 
     def mousePressEvent(self, event):
-        """Sol tıklandığında metni kopyala, sağ tıklandığında seçeneği sun veya kapat."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            QGuiApplication.clipboard().setText(self.translated_text)
-            self.copy_requested.emit(self.translated_text)
-        elif event.button() == Qt.MouseButton.RightButton:
-            self.close()
+        """Üzerine tıklandığında (sol veya sağ tık) metni kopyalar ve popup'ı anında kapatır."""
+        QGuiApplication.clipboard().setText(self.translated_text)
+        self.copy_requested.emit(self.translated_text)
+        self.close()
         super().mousePressEvent(event)
 
 
