@@ -2,7 +2,7 @@ import sys
 import ctypes
 from ctypes import wintypes
 from PySide6.QtCore import Qt, QRect, QPoint, Signal
-from PySide6.QtGui import QPainter, QPen, QColor, QGuiApplication
+from PySide6.QtGui import QPainter, QPen, QColor, QFont, QGuiApplication
 from PySide6.QtWidgets import QWidget
 
 
@@ -23,7 +23,7 @@ class SelectionOverlay(QWidget):
             Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.setCursor(Qt.CursorShape.CrossCursor)
+        self.setCursor(Qt.CursorShape.ArrowCursor)
 
         self.start_point = None
         self.end_point = None
@@ -88,19 +88,69 @@ class SelectionOverlay(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Arka planı tamamen şeffaf tutmak için 1/255 dolgu (Windows fare olaylarını yakalar, görsel kararma yapmaz)
+        # Buffer Temizliği (Windows Translucent Pencere İz Bırakma / Çizgi Birikmesi Çözümü)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+        painter.fillRect(self.rect(), Qt.GlobalColor.transparent)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+
+        # Fare olaylarını yakalamak için 1/255 transparan dolgu
         painter.fillRect(self.rect(), QColor(0, 0, 0, 1))
 
-        if self.start_point and self.end_point:
+        if self.start_point and self.end_point and self.is_selecting:
             global_rect = QRect(self.start_point, self.end_point).normalized()
-
             local_top_left = self.mapFromGlobal(global_rect.topLeft())
             local_bottom_right = self.mapFromGlobal(global_rect.bottomRight())
             local_rect = QRect(local_top_left, local_bottom_right)
 
-            # Yalnızca ince mavi çerçeve (saydam iç dolgu yok)
-            pen = QPen(QColor(0, 120, 212), 1.5, Qt.PenStyle.SolidLine)
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)  # Tamamen şeffaf iç alan
-            painter.drawRect(local_rect)
+            full_region = self.rect()
+            
+            # Kurumsal Mat Dış Karartma Maskesi (Gözü yormayan %45 mat koyu zemin)
+            painter.save()
+            overlay_color = QColor(15, 15, 20, 115)
+            
+            # Üst
+            painter.fillRect(QRect(0, 0, full_region.width(), local_rect.top()), overlay_color)
+            # Alt
+            painter.fillRect(QRect(0, local_rect.bottom() + 1, full_region.width(), full_region.height() - local_rect.bottom()), overlay_color)
+            # Sol
+            painter.fillRect(QRect(0, local_rect.top(), local_rect.left(), local_rect.height() + 1), overlay_color)
+            # Sağ
+            painter.fillRect(QRect(local_rect.right() + 1, local_rect.top(), full_region.width() - local_rect.right(), local_rect.height() + 1), overlay_color)
+            painter.restore()
+
+            # Jilet Gibi Keskin Kurumsal Mavi Çerçeve (#0078D4)
+            border_pen = QPen(QColor(0, 120, 212), 1.5, Qt.PenStyle.SolidLine)
+            painter.setPen(border_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(local_rect, 4, 4)
+
+            # Minimalist Kurumsal Boyut Gösterge Etiketi (Dimension Badge: W x H px)
+            w = local_rect.width()
+            h = local_rect.height()
+            if w > 35 and h > 15:
+                badge_text = f"{w} × {h} px"
+                font = painter.font()
+                font.setPointSize(9)
+                font.setWeight(QFont.Weight.Medium)
+                font.setFamily("Segoe UI")
+                painter.setFont(font)
+
+                metrics = painter.fontMetrics()
+                bw = metrics.horizontalAdvance(badge_text) + 14
+                bh = 20
+
+                # Etiketi kutunun hemen altına koy
+                bx = local_rect.left()
+                by = local_rect.bottom() + 6
+                if by + bh > full_region.bottom() - 10:
+                    by = local_rect.top() - bh - 6
+
+                badge_rect = QRect(bx, by, bw, bh)
+                painter.setPen(QPen(QColor(63, 63, 70), 1))
+                painter.setBrush(QColor(24, 24, 27, 230))
+                painter.drawRoundedRect(badge_rect, 3, 3)
+
+                painter.setPen(QPen(QColor(212, 212, 216)))
+                painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, badge_text)

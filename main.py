@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ui.selection_overlay import SelectionOverlay
-from ui.popup import TranslationPopup, show_error_popup
+from ui.popup import TranslationPopup, LoadingPopup, show_error_popup
 from ui.history_tab import HistoryTab
 from ui.settings_tab import SettingsTab
 from services.capture import capture_screen_area
@@ -309,12 +309,33 @@ class MainWindow(QMainWindow):
         self.status_label.setText("⏳ Metin okunuyor ve çevriliyor...")
         self.status_label.setStyleSheet("color: #00E5FF; font-weight: bold; font-size: 12px;")
 
+        # Eski popup varsa kapat ve anlık yükleme göstergesini göster
+        if self.active_popup is not None:
+            try:
+                self.active_popup.close()
+                self.active_popup.deleteLater()
+            except Exception:
+                pass
+            self.active_popup = None
+
+        self.active_popup = LoadingPopup(rect)
+        self.active_popup.show()
+
         self.worker_thread = TranslationWorkerThread(rect, physical_coords, self.ocr_service, self.translate_service)
         self.worker_thread.finished.connect(self.on_translation_finished)
         self.worker_thread.error.connect(self.on_translation_error)
         self.worker_thread.start()
 
     def on_translation_finished(self, ocr_text: str, translated: str, src_lang: str, tgt_lang: str, rect: QRect, physical_coords: tuple):
+        # Yükleme popup'ını kapat
+        if self.active_popup is not None:
+            try:
+                self.active_popup.close()
+                self.active_popup.deleteLater()
+            except Exception:
+                pass
+            self.active_popup = None
+
         if not ocr_text.strip():
             self.status_label.setText("⚠️ Okunabilir metin bulunamadı.")
             self.status_label.setStyleSheet("color: #FFCC00; font-weight: bold; font-size: 12px;")
@@ -357,7 +378,13 @@ class MainWindow(QMainWindow):
         print("=" * 60 + "\n")
         sys.stdout.flush()
 
-        # Eski popup varsa kapat
+        duration = self.settings_service.get("popup_duration", 5)
+        self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
+        self.active_popup.copy_requested.connect(lambda text: QApplication.clipboard().setText(text))
+        self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
+        self.active_popup.show()
+
+    def on_translation_error(self, error_msg: str):
         if self.active_popup is not None:
             try:
                 self.active_popup.close()
@@ -366,13 +393,6 @@ class MainWindow(QMainWindow):
                 pass
             self.active_popup = None
 
-        duration = self.settings_service.get("popup_duration", 5)
-        self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
-        self.active_popup.copy_requested.connect(lambda text: QApplication.clipboard().setText(text))
-        self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
-        self.active_popup.show()
-
-    def on_translation_error(self, error_msg: str):
         self.status_label.setText(f"❌ Hata: {error_msg}")
         self.status_label.setStyleSheet("color: #FF6B6B; font-size: 12px;")
         print(f"[HATA] {error_msg}")
