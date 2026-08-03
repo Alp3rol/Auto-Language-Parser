@@ -9,7 +9,7 @@ class SettingsService:
     DEFAULT_SETTINGS = {
         "auto_copy": True,
         "auto_tts": False,
-        "popup_duration": 5,
+        "popup_duration": 0,
         "hotkey_preset": "Alt+S"
     }
 

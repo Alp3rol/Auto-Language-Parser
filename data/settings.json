@@ -1,6 +1,6 @@
 {
   "auto_copy": true,
   "auto_tts": false,
-  "popup_duration": 5,
+  "popup_duration": 0,
   "hotkey_preset": "Alt+S"
 }

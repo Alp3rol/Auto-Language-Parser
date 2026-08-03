@@ -378,7 +378,7 @@ class MainWindow(QMainWindow):
         print("=" * 60 + "\n")
         sys.stdout.flush()
 
-        duration = self.settings_service.get("popup_duration", 5)
+        duration = self.settings_service.get("popup_duration", 0)
         self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
         self.active_popup.copy_requested.connect(lambda text: QApplication.clipboard().setText(text))
         self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))

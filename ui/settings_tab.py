@@ -88,10 +88,10 @@ class SettingsTab(QWidget):
         duration_layout.addWidget(lbl_dur)
 
         self.cmb_duration = QComboBox()
-        self.cmb_duration.addItem("5 Saniye (Varsayılan)", 5)
+        self.cmb_duration.addItem("Tıklayana Kadar Kapanmasın (Varsayılan)", 0)
         self.cmb_duration.addItem("3 Saniye", 3)
+        self.cmb_duration.addItem("5 Saniye", 5)
         self.cmb_duration.addItem("10 Saniye", 10)
-        self.cmb_duration.addItem("Otomatik Kapanmasın (Sabit)", 0)
         duration_layout.addWidget(self.cmb_duration)
         p_layout.addLayout(duration_layout)
 
