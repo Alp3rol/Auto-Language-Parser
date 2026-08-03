@@ -140,35 +140,52 @@ class MainWindow(QMainWindow):
 
     def setup_ui(self):
         central_widget = QWidget()
+        central_widget.setStyleSheet("background-color: #081425; color: #D8E3FB; font-family: 'Inter', 'Segoe UI', sans-serif;")
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(8, 8, 8, 8)
 
-        # Tab Widget (Sekmeli Görünüm)
+        # Stitch Slate & Cyan Ana Sekme Yapısı
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
-                border: 1px solid #333333;
-                background-color: #181818;
-                border-radius: 8px;
+                border: 1px solid #1E2E42;
+                background-color: #081425;
+                border-radius: 6px;
             }
             QTabBar::tab {
-                background-color: #252526;
-                color: #AAAAAA;
-                padding: 8px 16px;
-                font-weight: bold;
+                background-color: #111C2D;
+                color: #94A3B8;
+                padding: 9px 16px;
+                font-weight: 600;
                 font-size: 12px;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
-                margin-right: 2px;
+                border: none;
+                border-bottom: 2px solid transparent;
             }
             QTabBar::tab:selected {
-                background-color: #0078D4;
-                color: #FFFFFF;
+                background-color: #192638;
+                color: #7BD0FF;
+                border-bottom: 2px solid #7BD0FF;
             }
             QTabBar::tab:hover:!selected {
-                background-color: #2D2D30;
+                background-color: #152031;
                 color: #FFFFFF;
+            }
+            QGroupBox {
+                border: 1px solid #1E2E42;
+                border-radius: 6px;
+                margin-top: 10px;
+                color: #7BD0FF;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QTextEdit {
+                background-color: #040E1F;
+                color: #D8E3FB;
+                border: 1px solid #1E2E42;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 12px;
             }
         """)
 
@@ -178,17 +195,32 @@ class MainWindow(QMainWindow):
         t_layout.setSpacing(10)
         t_layout.setContentsMargins(12, 12, 12, 12)
 
-        title_label = QLabel("A.L.P. Ekran Çeviri Kontrol Paneli")
-        title_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title_label = QLabel("A.L.P. EKRAN ÇEVİRİ PANELİ")
+        title_label.setFont(QFont("Inter", 12, QFont.Weight.Bold))
+        title_label.setStyleSheet("color: #D8E3FB; letter-spacing: 1px;")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         t_layout.addWidget(title_label)
 
         self.select_btn = QPushButton("🎯 Ekran Seçimi Yap (Alt+S veya F8)")
         self.select_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.select_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #7BD0FF;
+                color: #00374D;
+                font-size: 13px;
+                font-weight: 700;
+                border-radius: 6px;
+                padding: 10px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #99DCFF;
+            }
+        """)
         self.select_btn.clicked.connect(self.start_selection_safe)
         t_layout.addWidget(self.select_btn)
 
-        info_group = QGroupBox("Son Çeviri & OCR Sonucu")
+        info_group = QGroupBox("SON ÇEVİRİ VE OCR SONUCU")
         group_layout = QVBoxLayout(info_group)
 
         self.status_label = QLabel("Kısayola basıp ekran üzerinde çevrilecek alanı seçin.")
@@ -202,12 +234,40 @@ class MainWindow(QMainWindow):
 
         action_layout = QHBoxLayout()
         self.listen_btn = QPushButton("🔊 Son Çeviriyi Dinle")
-        self.listen_btn.setStyleSheet("background-color: #2D2D30; color: #00E5FF;")
+        self.listen_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #192638;
+                color: #7BD0FF;
+                border: 1px solid #1E2E42;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-weight: 600;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #203148;
+                color: #FFFFFF;
+            }
+        """)
         self.listen_btn.clicked.connect(self.speak_current_translation)
         action_layout.addWidget(self.listen_btn)
 
         self.copy_btn = QPushButton("📋 Çeviriyi Kopyala")
-        self.copy_btn.setStyleSheet("background-color: #2D2D30; color: #00FF88;")
+        self.copy_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #192638;
+                color: #7BD0FF;
+                border: 1px solid #1E2E42;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-weight: 600;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #203148;
+                color: #FFFFFF;
+            }
+        """)
         self.copy_btn.clicked.connect(self.copy_current_translation)
         action_layout.addWidget(self.copy_btn)
 

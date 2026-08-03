@@ -32,12 +32,15 @@ class HistoryTab(QWidget):
         self.search_input.setPlaceholderText("🔍 Geçmişte ara...")
         self.search_input.setStyleSheet("""
             QLineEdit {
-                background-color: #252526;
-                color: #FFFFFF;
-                border: 1px solid #3E3E42;
+                background-color: #040E1F;
+                color: #D8E3FB;
+                border: 1px solid #1E2E42;
                 border-radius: 6px;
                 padding: 6px 12px;
                 font-size: 12px;
+            }
+            QLineEdit:focus {
+                border-color: #7BD0FF;
             }
         """)
         self.search_input.textChanged.connect(self.filter_history)
@@ -46,17 +49,17 @@ class HistoryTab(QWidget):
         clear_btn = QPushButton("🗑️ Temizle")
         clear_btn.setStyleSheet("""
             QPushButton {
-                background-color: #3A1C1C;
-                color: #FF6B6B;
-                border: 1px solid #5C2424;
+                background-color: #3E1A1A;
+                color: #FF7B7B;
+                border: 1px solid #5A2525;
                 border-radius: 6px;
                 padding: 6px 12px;
                 font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #8B0000;
-                color: white;
+                background-color: #7B2525;
+                color: #FFFFFF;
             }
         """)
         clear_btn.clicked.connect(self.clear_history)
@@ -76,18 +79,23 @@ class HistoryTab(QWidget):
 
         self.table.setStyleSheet("""
             QTableWidget {
-                background-color: #1E1E1E;
-                color: #FFFFFF;
-                gridline-color: #333333;
-                border: 1px solid #333333;
-                border-radius: 8px;
+                background-color: #040E1F;
+                color: #D8E3FB;
+                gridline-color: #1E2E42;
+                border: 1px solid #1E2E42;
+                border-radius: 6px;
             }
             QHeaderView::section {
-                background-color: #2D2D30;
-                color: #00E5FF;
+                background-color: #111C2D;
+                color: #7BD0FF;
                 padding: 6px;
                 font-weight: bold;
                 border: none;
+                border-bottom: 1px solid #1E2E42;
+            }
+            QTableWidget::item:selected {
+                background-color: #192638;
+                color: #7BD0FF;
             }
         """)
         layout.addWidget(self.table)
