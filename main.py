@@ -3,7 +3,7 @@ import sys
 from pynput import keyboard as pynput_keyboard
 
 from PySide6.QtCore import QObject, Signal, QRect, Qt, QThread
-from PySide6.QtGui import QIcon, QPixmap, QColor, QPainter, QAction, QFont, QKeySequence, QShortcut
+from PySide6.QtGui import QIcon, QPixmap, QColor, QPainter, QAction, QFont, QKeySequence, QShortcut, QGuiApplication
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QSystemTrayIcon, QMenu, QGroupBox, QTextEdit,
@@ -111,9 +111,12 @@ class MainWindow(QMainWindow):
     """A.L.P. (Auto Language Parser) Ana Uygulama Penceresi"""
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("A.L.P. (Auto Language Parser) - Windows Ekran Çevirici")
-        self.resize(600, 520)
+        self.setWindowTitle("A.L.P. (Auto Language Parser)")
+        self.resize(540, 480)
         self.setWindowIcon(create_app_icon())
+
+        # Görev çubuğunda (Taskbar) görünmesini engellemek için Tool bayrağı ekle
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.Tool)
 
         # Servisleri başlat
         self.ocr_service = OCRService()
@@ -139,7 +142,7 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setContentsMargins(8, 8, 8, 8)
 
         # Tab Widget (Sekmeli Görünüm)
         self.tabs = QTabWidget()
@@ -152,9 +155,9 @@ class MainWindow(QMainWindow):
             QTabBar::tab {
                 background-color: #252526;
                 color: #AAAAAA;
-                padding: 10px 20px;
+                padding: 8px 16px;
                 font-weight: bold;
-                font-size: 13px;
+                font-size: 12px;
                 border-top-left-radius: 6px;
                 border-top-right-radius: 6px;
                 margin-right: 2px;
@@ -172,11 +175,11 @@ class MainWindow(QMainWindow):
         # Sekme 1: Çeviri Kontrol Paneli
         translation_panel = QWidget()
         t_layout = QVBoxLayout(translation_panel)
-        t_layout.setSpacing(12)
-        t_layout.setContentsMargins(15, 15, 15, 15)
+        t_layout.setSpacing(10)
+        t_layout.setContentsMargins(12, 12, 12, 12)
 
         title_label = QLabel("A.L.P. Ekran Çeviri Kontrol Paneli")
-        title_label.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        title_label.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         t_layout.addWidget(title_label)
 
@@ -189,7 +192,7 @@ class MainWindow(QMainWindow):
         group_layout = QVBoxLayout(info_group)
 
         self.status_label = QLabel("Kısayola basıp ekran üzerinde çevrilecek alanı seçin.")
-        self.status_label.setStyleSheet("color: #AAAAAA; font-size: 12px;")
+        self.status_label.setStyleSheet("color: #AAAAAA; font-size: 11px;")
         group_layout.addWidget(self.status_label)
 
         self.text_display = QTextEdit()
@@ -226,6 +229,19 @@ class MainWindow(QMainWindow):
 
         self.last_translated_text = ""
         self.last_target_lang = "tr"
+
+    def position_at_bottom_right(self):
+        """Pencereyi ekranın sağ alt köşesine (görev çubuğunun hemen üstüne) hizalar."""
+        screen = QGuiApplication.primaryScreen()
+        avail_geo = screen.availableGeometry()
+
+        win_w = self.width()
+        win_h = self.height()
+
+        x = avail_geo.right() - win_w - 12
+        y = avail_geo.bottom() - win_h - 12
+
+        self.setGeometry(x, y, win_w, win_h)
 
     def setup_shortcuts(self):
         QShortcut(QKeySequence("Alt+S"), self, self.start_selection_safe)
@@ -267,6 +283,7 @@ class MainWindow(QMainWindow):
             self.show_and_activate()
 
     def show_and_activate(self):
+        self.position_at_bottom_right()
         self.showNormal()
         self.activateWindow()
 
@@ -375,10 +392,8 @@ def main():
     app.setQuitOnLastWindowClosed(False)
 
     window = MainWindow()
-    # Uygulama doğrudan sistem tepsisinde (System Tray) başlatılır
     window.hide()
 
-    # Sistem tepsisinde açılış bilgilendirme bildirimi göster
     window.tray_icon.showMessage(
         "A.L.P. (Auto Language Parser)",
         "Uygulama arka planda ve sistem tepsisinde aktif.\nKısayollar: Alt+S veya F8",
