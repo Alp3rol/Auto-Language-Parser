@@ -375,7 +375,16 @@ def main():
     app.setQuitOnLastWindowClosed(False)
 
     window = MainWindow()
-    window.show()
+    # Uygulama doğrudan sistem tepsisinde (System Tray) başlatılır
+    window.hide()
+
+    # Sistem tepsisinde açılış bilgilendirme bildirimi göster
+    window.tray_icon.showMessage(
+        "A.L.P. (Auto Language Parser)",
+        "Uygulama arka planda ve sistem tepsisinde aktif.\nKısayollar: Alt+S veya F8",
+        QSystemTrayIcon.MessageIcon.Information,
+        3000
+    )
 
     sys.exit(app.exec())
 
