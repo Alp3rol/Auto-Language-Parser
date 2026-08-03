@@ -55,6 +55,22 @@ class TranslationService:
             return translated, detected_src
         return "", ""
 
+    def clean_text(self, text: str) -> str:
+        """
+        OCR'dan gelen yapay satır sonu (\n) kırılmalarını temizleyerek cümlelerin bölünmesini önler.
+        Google Translate'in cümle bütünlüğünü koruyup kurallı Türkçe (özne-yüklem uyumlu) çeviri yapmasını sağlar.
+        """
+        if not text or not text.strip():
+            return ""
+        paragraphs = text.split("\n\n")
+        cleaned_paragraphs = []
+        for p in paragraphs:
+            lines = [line.strip() for line in p.splitlines() if line.strip()]
+            cleaned_p = " ".join(lines)
+            if cleaned_p:
+                cleaned_paragraphs.append(cleaned_p)
+        return "\n\n".join(cleaned_paragraphs)
+
     def translate(self, text: str) -> tuple[str, str, str]:
         """
         Metni çevirir.
@@ -64,6 +80,9 @@ class TranslationService:
         """
         if not text or not text.strip():
             return "", "auto", "tr"
+
+        # OCR yapay satır kırılmalarını temizleyerek Google Translate'e tek bütün cümle olarak gönder
+        text = self.clean_text(text)
 
         source_lang = self.detect_language(text)
         target_lang = "tr" if source_lang == "en" else "en"
