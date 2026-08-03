@@ -53,7 +53,7 @@ class HistoryService:
         history = history[:100]
         self._save_data(history)
 
-    def get_history((self) -> list:
+    def get_history(self) -> list:
         """Tüm çeviri geçmişini döndürür."""
         return self._load_data()
 
