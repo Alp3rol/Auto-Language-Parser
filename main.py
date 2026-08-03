@@ -139,140 +139,184 @@ class MainWindow(QMainWindow):
         self.setup_pynput_hotkey()
 
     def setup_ui(self):
-        central_widget = QWidget()
-        central_widget.setStyleSheet("background-color: #081425; color: #D8E3FB; font-family: 'Inter', 'Segoe UI', sans-serif;")
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(8, 8, 8, 8)
+        # Frameless Window ile modern pencere başlık çubuğu
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
-        # Stitch Slate & Cyan Ana Sekme Yapısı
-        self.tabs = QTabWidget()
-        self.tabs.setStyleSheet("""
+        central_widget = QWidget()
+        central_widget.setObjectName("centralWidget")
+        central_widget.setStyleSheet("""
+            QWidget#centralWidget {
+                background-color: #09090B;
+                border: 1px solid #27272A;
+                border-radius: 10px;
+            }
+            QWidget {
+                color: #F4F4F5;
+                font-family: 'Segoe UI', -apple-system, sans-serif;
+            }
             QTabWidget::pane {
-                border: 1px solid #1E2E42;
-                background-color: #081425;
-                border-radius: 6px;
+                border: 1px solid #27272A;
+                background-color: #18181B;
+                border-radius: 8px;
             }
             QTabBar::tab {
-                background-color: #111C2D;
-                color: #94A3B8;
-                padding: 9px 16px;
+                background-color: transparent;
+                color: #A1A1AA;
+                padding: 7px 16px;
                 font-weight: 600;
                 font-size: 12px;
-                border: none;
-                border-bottom: 2px solid transparent;
+                border-radius: 6px;
+                margin: 2px;
             }
             QTabBar::tab:selected {
-                background-color: #192638;
-                color: #7BD0FF;
-                border-bottom: 2px solid #7BD0FF;
+                background-color: #27272A;
+                color: #F4F4F5;
             }
             QTabBar::tab:hover:!selected {
-                background-color: #152031;
+                background-color: #18181B;
                 color: #FFFFFF;
             }
-            QGroupBox {
-                border: 1px solid #1E2E42;
-                border-radius: 6px;
-                margin-top: 10px;
-                color: #7BD0FF;
-                font-weight: bold;
-                font-size: 12px;
-            }
             QTextEdit {
-                background-color: #040E1F;
-                color: #D8E3FB;
-                border: 1px solid #1E2E42;
+                background-color: #09090B;
+                color: #F4F4F5;
+                border: 1px solid #27272A;
                 border-radius: 6px;
-                padding: 8px;
-                font-size: 12px;
+                padding: 10px;
+                font-size: 13px;
+                line-height: 1.4;
             }
         """)
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(1, 1, 1, 1)
+        main_layout.setSpacing(0)
+
+        # 1. Özel Frameless Başlık Çubuğu (TitleBar)
+        title_bar = QWidget()
+        title_bar.setFixedHeight(38)
+        title_bar.setStyleSheet("background-color: #18181B; border-top-left-radius: 9px; border-top-right-radius: 9px; border-bottom: 1px solid #27272A;")
+        tb_layout = QHBoxLayout(title_bar)
+        tb_layout.setContentsMargins(12, 0, 8, 0)
+
+        app_title = QLabel("⚡ A.L.P. Screen Translator")
+        app_title.setStyleSheet("font-size: 12px; font-weight: 700; color: #F4F4F5;")
+        tb_layout.addWidget(app_title)
+
+        tb_layout.addStretch()
+
+        btn_min = QPushButton("—")
+        btn_min.setFixedSize(28, 24)
+        btn_min.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_min.setStyleSheet("QPushButton { background: transparent; color: #A1A1AA; border: none; font-size: 12px; } QPushButton:hover { background-color: #27272A; color: #FFF; border-radius: 4px; }")
+        btn_min.clicked.connect(self.hide)
+        tb_layout.addWidget(btn_min)
+
+        btn_close = QPushButton("✕")
+        btn_close.setFixedSize(28, 24)
+        btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_close.setStyleSheet("QPushButton { background: transparent; color: #A1A1AA; border: none; font-size: 12px; } QPushButton:hover { background-color: #EF4444; color: #FFF; border-radius: 4px; }")
+        btn_close.clicked.connect(self.hide)
+        tb_layout.addWidget(btn_close)
+
+        main_layout.addWidget(title_bar)
+
+        # İç İçerik Alanı
+        content_widget = QWidget()
+        c_layout = QVBoxLayout(content_widget)
+        c_layout.setContentsMargins(10, 10, 10, 10)
+        c_layout.setSpacing(10)
+
+        # 2. Linear/Raycast Stilinde Sekme Barı
+        self.tabs = QTabWidget()
 
         # Sekme 1: Çeviri Kontrol Paneli
         translation_panel = QWidget()
         t_layout = QVBoxLayout(translation_panel)
-        t_layout.setSpacing(10)
+        t_layout.setSpacing(12)
         t_layout.setContentsMargins(12, 12, 12, 12)
 
-        title_label = QLabel("A.L.P. EKRAN ÇEVİRİ PANELİ")
-        title_label.setFont(QFont("Inter", 12, QFont.Weight.Bold))
-        title_label.setStyleSheet("color: #D8E3FB; letter-spacing: 1px;")
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        t_layout.addWidget(title_label)
-
+        # Ekran Seçimi Butonu
         self.select_btn = QPushButton("🎯 Ekran Seçimi Yap (Alt+S veya F8)")
+        self.select_btn.setFixedHeight(40)
         self.select_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.select_btn.setStyleSheet("""
             QPushButton {
-                background-color: #7BD0FF;
-                color: #00374D;
+                background-color: #0078D4;
+                color: #FFFFFF;
                 font-size: 13px;
                 font-weight: 700;
                 border-radius: 6px;
-                padding: 10px;
                 border: none;
             }
             QPushButton:hover {
-                background-color: #99DCFF;
+                background-color: #106EBE;
             }
         """)
         self.select_btn.clicked.connect(self.start_selection_safe)
         t_layout.addWidget(self.select_btn)
 
-        info_group = QGroupBox("SON ÇEVİRİ VE OCR SONUCU")
-        group_layout = QVBoxLayout(info_group)
+        # Son Çeviri Kartı (Sorunsuz Inset Card)
+        result_card = QWidget()
+        result_card.setStyleSheet("background-color: #18181B; border: 1px solid #27272A; border-radius: 8px;")
+        rc_layout = QVBoxLayout(result_card)
+        rc_layout.setContentsMargins(12, 12, 12, 12)
+        rc_layout.setSpacing(8)
+
+        lbl_hdr = QLabel("SON ÇEVİRİ VE OCR SONUCU")
+        lbl_hdr.setStyleSheet("font-size: 11px; font-weight: 700; color: #A1A1AA; letter-spacing: 0.5px; border: none; background: transparent;")
+        rc_layout.addWidget(lbl_hdr)
 
         self.status_label = QLabel("Kısayola basıp ekran üzerinde çevrilecek alanı seçin.")
-        self.status_label.setStyleSheet("color: #AAAAAA; font-size: 11px;")
-        group_layout.addWidget(self.status_label)
+        self.status_label.setStyleSheet("color: #71717A; font-size: 12px; border: none; background: transparent;")
+        rc_layout.addWidget(self.status_label)
 
         self.text_display = QTextEdit()
         self.text_display.setReadOnly(True)
         self.text_display.setPlaceholderText("OCR ve Çeviri sonuçları burada görünecektir...")
-        group_layout.addWidget(self.text_display)
+        rc_layout.addWidget(self.text_display)
 
         action_layout = QHBoxLayout()
         self.listen_btn = QPushButton("🔊 Son Çeviriyi Dinle")
+        self.listen_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.listen_btn.setStyleSheet("""
             QPushButton {
-                background-color: #192638;
-                color: #7BD0FF;
-                border: 1px solid #1E2E42;
+                background-color: #27272A;
+                color: #F4F4F5;
+                border: 1px solid #3F3F46;
                 border-radius: 6px;
                 padding: 8px 12px;
                 font-weight: 600;
                 font-size: 12px;
             }
             QPushButton:hover {
-                background-color: #203148;
-                color: #FFFFFF;
+                background-color: #3F3F46;
             }
         """)
         self.listen_btn.clicked.connect(self.speak_current_translation)
         action_layout.addWidget(self.listen_btn)
 
         self.copy_btn = QPushButton("📋 Çeviriyi Kopyala")
+        self.copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.copy_btn.setStyleSheet("""
             QPushButton {
-                background-color: #192638;
-                color: #7BD0FF;
-                border: 1px solid #1E2E42;
+                background-color: #27272A;
+                color: #F4F4F5;
+                border: 1px solid #3F3F46;
                 border-radius: 6px;
                 padding: 8px 12px;
                 font-weight: 600;
                 font-size: 12px;
             }
             QPushButton:hover {
-                background-color: #203148;
-                color: #FFFFFF;
+                background-color: #3F3F46;
             }
         """)
         self.copy_btn.clicked.connect(self.copy_current_translation)
         action_layout.addWidget(self.copy_btn)
 
-        group_layout.addLayout(action_layout)
-        t_layout.addWidget(info_group)
+        rc_layout.addLayout(action_layout)
+        t_layout.addWidget(result_card)
 
         # Sekme 2: Çeviri Geçmişi Tabı
         self.history_tab = HistoryTab(self.history_service, self.tts_service)
@@ -282,10 +326,22 @@ class MainWindow(QMainWindow):
 
         # Sekmeleri Ekle
         self.tabs.addTab(translation_panel, "🎯 Çeviri Paneli")
-        self.tabs.addTab(self.history_tab, "📚 Çeviri Geçmişi")
+        self.tabs.addTab(self.history_tab, "📚 Geçmiş")
         self.tabs.addTab(self.settings_tab, "⚙️ Ayarlar")
 
-        main_layout.addWidget(self.tabs)
+        c_layout.addWidget(self.tabs)
+        main_layout.addWidget(content_widget)
+
+    def mousePressEvent(self, event):
+        """Frameless pencereyi fare ile sürükleyebilmek için mouse devralma."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.MouseButton.LeftButton and hasattr(self, '_drag_pos'):
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
 
         self.last_translated_text = ""
         self.last_target_lang = "tr"

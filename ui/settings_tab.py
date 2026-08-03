@@ -25,59 +25,57 @@ class SettingsTab(QWidget):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(12)
 
-        # Birebir Stitch Dark Slate Teması
+        # Birebir Premium Obsidian Zinc Teması
         self.setStyleSheet("""
             QWidget {
-                background-color: #081425;
-                color: #D8E3FB;
-                font-family: 'Inter', 'Segoe UI', sans-serif;
+                background-color: #09090B;
+                color: #F4F4F5;
+                font-family: 'Segoe UI', -apple-system, sans-serif;
             }
 
             /* Üst Menü Navigasyon Sekmeleri */
             QTabWidget::pane {
-                border: 1px solid #1E2E42;
-                background-color: #081425;
+                border: 1px solid #27272A;
+                background-color: #09090B;
                 border-radius: 6px;
             }
             QTabBar::tab {
-                background-color: #111C2D;
-                color: #94A3B8;
-                padding: 8px 0px;
+                background-color: transparent;
+                color: #A1A1AA;
+                padding: 7px 16px;
                 font-weight: 600;
                 font-size: 12px;
-                min-width: 140px;
-                border: none;
-                border-bottom: 2px solid transparent;
+                border-radius: 6px;
+                margin: 2px;
             }
             QTabBar::tab:selected {
-                background-color: #192638;
-                color: #7BD0FF;
-                border-bottom: 2px solid #7BD0FF;
+                background-color: #27272A;
+                color: #F4F4F5;
             }
             QTabBar::tab:hover:!selected {
-                background-color: #152031;
+                background-color: #18181B;
                 color: #FFFFFF;
             }
 
             /* Bölüm Başlıkları */
             QLabel#sectionHeader {
-                color: #D8E3FB;
+                color: #A1A1AA;
                 font-size: 11px;
                 font-weight: 800;
-                letter-spacing: 1px;
+                letter-spacing: 0.5px;
             }
 
             /* Cam Kartlar (Glass Cards) */
             QFrame#settingCard {
-                background-color: rgba(25, 38, 56, 0.7);
-                border: 1px solid #1E2E42;
-                border-radius: 6px;
+                background-color: #18181B;
+                border: 1px solid #27272A;
+                border-radius: 8px;
             }
 
             /* Switch (CheckBox) Stili */
             QCheckBox#stitchToggle {
                 font-size: 13px;
-                color: #D8E3FB;
+                color: #F4F4F5;
                 font-weight: 500;
                 spacing: 8px;
             }
@@ -85,49 +83,49 @@ class SettingsTab(QWidget):
                 width: 32px;
                 height: 18px;
                 border-radius: 9px;
-                background-color: #1E2E42;
+                background-color: #27272A;
             }
             QCheckBox#stitchToggle::indicator:checked {
-                background-color: #7BD0FF;
+                background-color: #0078D4;
             }
 
             /* ComboBox Stili */
             QComboBox {
-                background-color: #040E1F;
-                color: #7BD0FF;
-                border: 1px solid #1E2E42;
-                border-radius: 4px;
-                padding: 4px 10px;
+                background-color: #09090B;
+                color: #F4F4F5;
+                border: 1px solid #27272A;
+                border-radius: 6px;
+                padding: 6px 12px;
                 font-size: 12px;
                 font-weight: 600;
             }
             QComboBox:hover {
-                border-color: #7BD0FF;
+                border-color: #0078D4;
             }
 
             /* İpucu Koyu Kartı */
             QFrame#infoToast {
-                background-color: #081828;
-                border: 1px solid #1A2B3F;
-                border-radius: 6px;
+                background-color: #18181B;
+                border: 1px solid #27272A;
+                border-radius: 8px;
             }
 
             /* Butonlar */
             QPushButton#btnSave {
-                background-color: #7BD0FF;
-                color: #00374D;
+                background-color: #0078D4;
+                color: #FFFFFF;
                 font-size: 12px;
                 font-weight: 700;
-                border-radius: 4px;
-                padding: 6px 18px;
+                border-radius: 6px;
+                padding: 7px 20px;
                 border: none;
             }
             QPushButton#btnSave:hover {
-                background-color: #99DCFF;
+                background-color: #106EBE;
             }
             QPushButton#btnCancel {
                 background-color: transparent;
-                color: #94A3B8;
+                color: #A1A1AA;
                 font-size: 12px;
                 font-weight: 600;
                 padding: 6px 12px;
@@ -138,13 +136,13 @@ class SettingsTab(QWidget):
             }
             QPushButton#btnReset {
                 background-color: transparent;
-                color: #64748B;
+                color: #71717A;
                 font-size: 11px;
                 padding: 6px 8px;
                 border: none;
             }
             QPushButton#btnReset:hover {
-                color: #94A3B8;
+                color: #A1A1AA;
             }
         """)
 
