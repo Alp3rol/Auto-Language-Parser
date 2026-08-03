@@ -1,0 +1,21 @@
+# Python & Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE & OS Files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs & Temporary Files
+*.log
+python-installer.exe
+python-embed.zip
+get-pip.py
