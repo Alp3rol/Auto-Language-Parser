@@ -2,7 +2,7 @@ import os
 import sys
 from pynput import keyboard as pynput_keyboard
 
-from PySide6.QtCore import QObject, Signal, QRect, Qt, QThread
+from PySide6.QtCore import QObject, Signal, QRect, Qt, QThread, QEvent
 from PySide6.QtGui import QIcon, QPixmap, QColor, QPainter, QAction, QFont, QKeySequence, QShortcut, QGuiApplication
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -115,7 +115,7 @@ class MainWindow(QMainWindow):
         self.resize(540, 480)
         self.setWindowIcon(create_app_icon())
 
-        # Görev çubuğunda (Taskbar) görünmesini engellemek için Tool bayrağı ekle
+        # Görev çubuğunda görünmemesi için Tool bayrağı ekle
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.Tool)
 
         # Servisleri başlat
@@ -242,6 +242,14 @@ class MainWindow(QMainWindow):
         y = avail_geo.bottom() - win_h - 12
 
         self.setGeometry(x, y, win_w, win_h)
+
+    def changeEvent(self, event):
+        """Pencere odağını kaybettiğinde (dışarı tıklandığında) otomatik tepsye gizlenir."""
+        if event.type() == QEvent.Type.ActivationChange:
+            if not self.isActiveWindow():
+                if not QApplication.activeModalWidget():
+                    self.hide()
+        super().changeEvent(event)
 
     def setup_shortcuts(self):
         QShortcut(QKeySequence("Alt+S"), self, self.start_selection_safe)
