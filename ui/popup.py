@@ -1,26 +1,31 @@
-from PySide6.QtCore import Qt, QTimer, QRect
+from PySide6.QtCore import Qt, QTimer, QRect, Signal
 from PySide6.QtGui import QFont, QColor, QGuiApplication
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGraphicsDropShadowEffect, QMessageBox
 )
 
 
 class TranslationPopup(QWidget):
     """
-    PySide6 ile oluşturulmuş modern çeviri popup penceresi (Aşama 4):
-    - Koyu yarı saydam arka plan (#1E1E1EEE / rgba(30, 30, 30, 0.93))
+    PySide6 ile oluşturulmuş modern çeviri popup penceresi:
+    - Koyu yarı saydam arka plan (rgba(30, 30, 30, 0.94))
     - Beyaz yazı & 12px border radius
     - Hafif drop shadow gölge efekti
-    - Maksimum genişlik 420px
-    - Metin fare ile seçilebilir (TextSelectableByMouse)
-    - Seçim dikdörtgeninin sağ altına yakın konumlama
-    - Ekran dışına taşarsa otomatik konum düzeltmesi
-    - 5 saniye sonra otomatik kaybolma
+    - 📋 Kopyala & 🔊 Sesli Okuma butonları
+    - Seçim dikdörtgeninin sağ altına yakın konumlama ve ekran sınırı düzeltmesi
+    - Yapılandırılabilir otomatik kaybolma süresi
     """
-    def __init__(self, original_text: str, translated_text: str, source_lang: str, target_lang: str, rect: QRect):
+    copy_requested = Signal(str)
+    speak_requested = Signal(str, str)
+
+    def __init__(self, original_text: str, translated_text: str, source_lang: str, target_lang: str, rect: QRect, duration_sec: int = 5):
         super().__init__()
-        # Çerçevesiz, en üstte, görev çubuğunda simge oluşturmayan pencere
+        self.original_text = original_text
+        self.translated_text = translated_text
+        self.source_lang = source_lang
+        self.target_lang = target_lang
+
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
@@ -34,22 +39,23 @@ class TranslationPopup(QWidget):
         self.apply_shadow_effect()
         self.position_near_bottom_right(rect)
 
-        # 5 saniye (5000 ms) sonra otomatik kaybolma zamanlayıcısı
-        self.timer = QTimer(self)
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self.close)
-        self.timer.start(5000)
+        # Süre > 0 ise otomatik kapanma zamanlayıcısı başlat
+        if duration_sec > 0:
+            self.timer = QTimer(self)
+            self.timer.setSingleShot(True)
+            self.timer.timeout.connect(self.close)
+            self.timer.start(duration_sec * 1000)
 
     def setup_ui(self, original_text: str, translated_text: str, source_lang: str, target_lang: str):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
 
-        # Koyu yarı saydam kart (#1E1E1EEE -> rgba(30, 30, 30, 0.93), 12px border-radius)
+        # Koyu yarı saydam kart (rgba(30, 30, 30, 0.94), 12px border-radius)
         container = QWidget()
         container.setObjectName("popupContainer")
         container.setStyleSheet("""
             QWidget#popupContainer {
-                background-color: rgba(30, 30, 30, 0.93);
+                background-color: rgba(30, 30, 30, 0.94);
                 border: 1.5px solid #0078D4;
                 border-radius: 12px;
             }
@@ -57,18 +63,45 @@ class TranslationPopup(QWidget):
                 color: #FFFFFF;
                 font-family: 'Segoe UI', sans-serif;
             }
+            QPushButton {
+                background-color: #252526;
+                color: #E0E0E0;
+                border: 1px solid #3E3E42;
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #0078D4;
+                color: white;
+                border-color: #0078D4;
+            }
         """)
 
         card_layout = QVBoxLayout(container)
         card_layout.setSpacing(8)
         card_layout.setContentsMargins(16, 14, 16, 14)
 
-        # Üst Dil Rozeti (örn: 🌐 EN ➜ TR)
+        # Üst Başlık (Dil Rozeti + Kopyala & Dinle Butonları)
         header_layout = QHBoxLayout()
-        lang_badge = QLabel(f"🌐  {source_lang.upper()}  ➜  {target_lang.upper()}")
+        lang_badge = QLabel(f"🌐  {source_lang.upper()}  ➔  {target_lang.upper()}")
         lang_badge.setStyleSheet("color: #00E5FF; font-weight: bold; font-size: 11px;")
         header_layout.addWidget(lang_badge)
         header_layout.addStretch()
+
+        # 🔊 Dinle Butonu
+        listen_btn = QPushButton("🔊 Dinle")
+        listen_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        listen_btn.clicked.connect(self.on_listen_clicked)
+        header_layout.addWidget(listen_btn)
+
+        # 📋 Kopyala Butonu
+        copy_btn = QPushButton("📋 Kopyala")
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        copy_btn.clicked.connect(self.on_copy_clicked)
+        header_layout.addWidget(copy_btn)
+
         card_layout.addLayout(header_layout)
 
         # Çeviri Metni (Fare ile Seçilebilir)
@@ -78,7 +111,7 @@ class TranslationPopup(QWidget):
         trans_label.setStyleSheet("color: #FFFFFF; font-size: 14px; font-weight: 600; line-height: 1.4;")
         card_layout.addWidget(trans_label)
 
-        # Orijinal Metin (Seçilebilir ve İpucu şeklinde)
+        # Orijinal Metin
         if original_text and len(original_text) < 150:
             orig_label = QLabel(f"“{original_text}”")
             orig_label.setWordWrap(True)
@@ -88,6 +121,13 @@ class TranslationPopup(QWidget):
 
         main_layout.addWidget(container)
         self.adjustSize()
+
+    def on_copy_clicked(self):
+        QGuiApplication.clipboard().setText(self.translated_text)
+        self.copy_requested.emit(self.translated_text)
+
+    def on_listen_clicked(self):
+        self.speak_requested.emit(self.translated_text, self.target_lang)
 
     def apply_shadow_effect(self):
         """Hafif drop shadow gölge efekti ekler."""
@@ -108,18 +148,14 @@ class TranslationPopup(QWidget):
         popup_w = min(420, max(260, self.width()))
         popup_h = self.height()
 
-        # Varsayılan Hedef Konum: Seçilen alanın sağ alt yakını
         pos_x = rect.right() - 20
         pos_y = rect.bottom() + 10
 
-        # Ekranın sağ kenarından taşıyorsa sola kaydır
         if pos_x + popup_w > screen_geo.right() - 12:
             pos_x = screen_geo.right() - popup_w - 12
-        # Ekranın sol kenarından taşıyorsa sağa kaydır
         if pos_x < screen_geo.left() + 12:
             pos_x = screen_geo.left() + 12
 
-        # Ekranın alt kenarından taşıyorsa yukarı (seçimin üstüne) taşı
         if pos_y + popup_h > screen_geo.bottom() - 12:
             pos_y = max(screen_geo.top() + 12, rect.top() - popup_h - 10)
 

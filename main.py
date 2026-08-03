@@ -5,23 +5,26 @@ from pynput import keyboard as pynput_keyboard
 from PySide6.QtCore import QObject, Signal, QRect, Qt, QThread
 from PySide6.QtGui import QIcon, QPixmap, QColor, QPainter, QAction, QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout,
-    QPushButton, QLabel, QSystemTrayIcon, QMenu, QGroupBox, QTextEdit
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QLabel, QSystemTrayIcon, QMenu, QGroupBox, QTextEdit,
+    QTabWidget
 )
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ui.selection_overlay import SelectionOverlay
 from ui.popup import TranslationPopup, show_error_popup
+from ui.history_tab import HistoryTab
+from ui.settings_tab import SettingsTab
 from services.capture import capture_screen_area
 from services.ocr_service import OCRService
 from services.translate_service import TranslationService
+from services.tts_service import TTSService
+from services.history_service import HistoryService
+from services.settings_service import SettingsService
 
 
 class TranslationWorkerThread(QThread):
-    """
-    Ekran kırpma (Qt native grabWindow), OCR (kelime boşluk korumalı) ve Çeviri adımlarını 
-    arka plan thread'inde çalıştıran işçi sınıfı.
-    """
+    """Ekran kırpma, OCR ve Çeviri adımlarını arka plan thread'inde çalıştıran işçi sınıfı."""
     finished = Signal(str, str, str, str, QRect, tuple)
     error = Signal(str)
 
@@ -34,16 +37,13 @@ class TranslationWorkerThread(QThread):
 
     def run(self):
         try:
-            # 1. Qt native grabWindow ile piksel-mükemmel ekran görüntüsü al
             pil_img = capture_screen_area(self.rect)
-
-            # 2. Metni OCR ile çıkar (kelimeler arası boşluk korumalı)
             ocr_text = self.ocr_service.extract_text(pil_img)
+
             if not ocr_text or not ocr_text.strip():
                 self.finished.emit("", "", "auto", "tr", self.rect, self.physical_coords)
                 return
 
-            # 3. Metnin dilini otomatik tespit et ve çevir (LibreTranslate)
             translated, src_lang, tgt_lang = self.translate_service.translate(ocr_text)
             self.finished.emit(ocr_text, translated, src_lang, tgt_lang, self.rect, self.physical_coords)
 
@@ -108,18 +108,24 @@ def create_app_icon():
 
 
 class MainWindow(QMainWindow):
-    """Kırpma Kayması ve Kelime Birleşme Düzeltmeli Ana Pencere"""
+    """A.L.P. (Auto Language Parser) Ana Uygulama Penceresi"""
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Windows Ekran Çevirici (Screen Translator)")
-        self.resize(540, 480)
+        self.setWindowTitle("A.L.P. (Auto Language Parser) - Windows Ekran Çevirici")
+        self.resize(600, 520)
         self.setWindowIcon(create_app_icon())
 
+        # Servisleri başlat
         self.ocr_service = OCRService()
         self.translate_service = TranslationService()
+        self.tts_service = TTSService()
+        self.history_service = HistoryService()
+        self.settings_service = SettingsService()
+
         self.worker_thread = None
         self.active_popup = None
 
+        # Seçim Overlay bileşeni
         self.overlay = SelectionOverlay()
         self.overlay.area_selected.connect(self.on_area_selected)
         self.overlay.cancelled.connect(self.on_selection_cancelled)
@@ -132,60 +138,52 @@ class MainWindow(QMainWindow):
     def setup_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
-        layout.setSpacing(12)
-        layout.setContentsMargins(20, 20, 20, 20)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(10, 10, 10, 10)
 
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #181818;
-            }
-            QLabel {
-                color: #FFFFFF;
-                font-family: 'Segoe UI', sans-serif;
-            }
-            QPushButton {
-                background-color: #0078D4;
-                color: white;
-                font-size: 15px;
-                font-weight: bold;
-                border-radius: 8px;
-                padding: 12px;
-                border: none;
-            }
-            QPushButton:hover {
-                background-color: #106EBE;
-            }
-            QPushButton:pressed {
-                background-color: #005A9E;
-            }
-            QGroupBox {
+        # Tab Widget (Sekmeli Görünüm)
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane {
                 border: 1px solid #333333;
+                background-color: #181818;
                 border-radius: 8px;
-                margin-top: 10px;
-                color: #0078D4;
-                font-weight: bold;
             }
-            QTextEdit {
+            QTabBar::tab {
                 background-color: #252526;
-                color: #00FF88;
-                border: 1px solid #3C3C3C;
-                border-radius: 6px;
-                padding: 8px;
-                font-family: 'Consolas', 'Segoe UI', monospace;
+                color: #AAAAAA;
+                padding: 10px 20px;
+                font-weight: bold;
                 font-size: 13px;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                margin-right: 2px;
+            }
+            QTabBar::tab:selected {
+                background-color: #0078D4;
+                color: #FFFFFF;
+            }
+            QTabBar::tab:hover:!selected {
+                background-color: #2D2D30;
+                color: #FFFFFF;
             }
         """)
 
-        title_label = QLabel("Ekran Çeviri Kontrol Paneli")
-        title_label.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        # Sekme 1: Çeviri Kontrol Paneli
+        translation_panel = QWidget()
+        t_layout = QVBoxLayout(translation_panel)
+        t_layout.setSpacing(12)
+        t_layout.setContentsMargins(15, 15, 15, 15)
+
+        title_label = QLabel("A.L.P. Ekran Çeviri Kontrol Paneli")
+        title_label.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title_label)
+        t_layout.addWidget(title_label)
 
         self.select_btn = QPushButton("🎯 Ekran Seçimi Yap (Alt+S veya F8)")
         self.select_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.select_btn.clicked.connect(self.start_selection_safe)
-        layout.addWidget(self.select_btn)
+        t_layout.addWidget(self.select_btn)
 
         info_group = QGroupBox("Son Çeviri & OCR Sonucu")
         group_layout = QVBoxLayout(info_group)
@@ -199,7 +197,35 @@ class MainWindow(QMainWindow):
         self.text_display.setPlaceholderText("OCR ve Çeviri sonuçları burada görünecektir...")
         group_layout.addWidget(self.text_display)
 
-        layout.addWidget(info_group)
+        action_layout = QHBoxLayout()
+        self.listen_btn = QPushButton("🔊 Son Çeviriyi Dinle")
+        self.listen_btn.setStyleSheet("background-color: #2D2D30; color: #00E5FF;")
+        self.listen_btn.clicked.connect(self.speak_current_translation)
+        action_layout.addWidget(self.listen_btn)
+
+        self.copy_btn = QPushButton("📋 Çeviriyi Kopyala")
+        self.copy_btn.setStyleSheet("background-color: #2D2D30; color: #00FF88;")
+        self.copy_btn.clicked.connect(self.copy_current_translation)
+        action_layout.addWidget(self.copy_btn)
+
+        group_layout.addLayout(action_layout)
+        t_layout.addWidget(info_group)
+
+        # Sekme 2: Çeviri Geçmişi Tabı
+        self.history_tab = HistoryTab(self.history_service, self.tts_service)
+
+        # Sekme 3: Ayarlar Tabı
+        self.settings_tab = SettingsTab(self.settings_service)
+
+        # Sekmeleri Ekle
+        self.tabs.addTab(translation_panel, "🎯 Çeviri Paneli")
+        self.tabs.addTab(self.history_tab, "📚 Çeviri Geçmişi")
+        self.tabs.addTab(self.settings_tab, "⚙️ Ayarlar")
+
+        main_layout.addWidget(self.tabs)
+
+        self.last_translated_text = ""
+        self.last_target_lang = "tr"
 
     def setup_shortcuts(self):
         QShortcut(QKeySequence("Alt+S"), self, self.start_selection_safe)
@@ -216,7 +242,7 @@ class MainWindow(QMainWindow):
 
     def setup_tray(self):
         self.tray_icon = QSystemTrayIcon(create_app_icon(), self)
-        self.tray_icon.setToolTip("Ekran Çevirici (Alt+S / F8)")
+        self.tray_icon.setToolTip("A.L.P. (Auto Language Parser)")
 
         menu = QMenu()
         show_action = QAction("Pencereyi Göster", self)
@@ -244,6 +270,16 @@ class MainWindow(QMainWindow):
         self.showNormal()
         self.activateWindow()
 
+    def speak_current_translation(self):
+        if self.last_translated_text:
+            self.tts_service.speak(self.last_translated_text, self.last_target_lang)
+
+    def copy_current_translation(self):
+        if self.last_translated_text:
+            QApplication.clipboard().setText(self.last_translated_text)
+            self.status_label.setText("📋 Çeviri panoya kopyalandı!")
+            self.status_label.setStyleSheet("color: #00FF88; font-weight: bold;")
+
     def on_area_selected(self, rect: QRect, physical_coords: tuple):
         self.status_label.setText("⏳ Metin okunuyor ve çevriliyor...")
         self.status_label.setStyleSheet("color: #00E5FF; font-weight: bold; font-size: 12px;")
@@ -266,6 +302,21 @@ class MainWindow(QMainWindow):
             )
             return
 
+        self.last_translated_text = translated
+        self.last_target_lang = tgt_lang
+
+        # Geçmişe kaydet ve Geçmiş Tablosunu Yenile
+        self.history_service.add_item(ocr_text, translated, src_lang, tgt_lang)
+        self.history_tab.load_history()
+
+        # Otomatik Kopyalama
+        if self.settings_service.get("auto_copy", True):
+            QApplication.clipboard().setText(translated)
+
+        # Otomatik Sesli Okuma
+        if self.settings_service.get("auto_tts", False):
+            self.tts_service.speak(translated, tgt_lang)
+
         self.status_label.setText(f"✅ Çeviri Başarılı ({src_lang.upper()} ➔ {tgt_lang.upper()})")
         self.status_label.setStyleSheet("color: #00FF88; font-weight: bold; font-size: 12px;")
 
@@ -281,6 +332,7 @@ class MainWindow(QMainWindow):
         print("=" * 60 + "\n")
         sys.stdout.flush()
 
+        # Eski popup varsa kapat
         if self.active_popup is not None:
             try:
                 self.active_popup.close()
@@ -289,7 +341,10 @@ class MainWindow(QMainWindow):
                 pass
             self.active_popup = None
 
-        self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect)
+        duration = self.settings_service.get("popup_duration", 5)
+        self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
+        self.active_popup.copy_requested.connect(lambda text: QApplication.clipboard().setText(text))
+        self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
         self.active_popup.show()
 
     def on_translation_error(self, error_msg: str):
@@ -298,11 +353,7 @@ class MainWindow(QMainWindow):
         print(f"[HATA] {error_msg}")
         sys.stdout.flush()
 
-        show_error_popup(
-            self,
-            "Bağlantı / Çeviri Hatası",
-            error_msg
-        )
+        show_error_popup(self, "Bağlantı / Çeviri Hatası", error_msg)
 
     def on_selection_cancelled(self):
         self.status_label.setText("Seçim iptal edildi (ESC tuşlandı veya alan çok küçük).")
