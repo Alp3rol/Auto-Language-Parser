@@ -430,6 +430,7 @@ class LoadingPopup(QWidget):
             pos_y = rect.y() + 10
 
         self.setGeometry(pos_x, pos_y, hint_w + 16, hint_h + 16)
+        QTimer.singleShot(8000, self.close)
 
 
 def show_error_popup(parent: QWidget, title: str, message: str):

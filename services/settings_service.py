@@ -24,12 +24,12 @@ class SettingsService:
         "enable_selection_translation": True,
         "auto_clipboard_translate": False,
         "selection_translate_hotkey": "Alt+C",
-        "enable_in_place": True,
+        "enable_in_place": False,
         "enable_context_ai": True,
         "enable_hover_dict": True,
         "hover_delay_ms": 400,
         "enable_vocab_builder": True,
-        "ocr_engine": "auto",
+        "ocr_engine": "rapid_paddle",
         "enable_radial_menu": False,
         "enable_hover_lookup": True
     }
@@ -50,11 +50,30 @@ class SettingsService:
         try:
             with open(self.filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                # Eksik anahtar varsa varsayılanlar ile doldur
-                merged = dict(self.DEFAULT_SETTINGS)
-                merged.update(data)
-                return merged
+
+            # Yeni ayarlar varsa eksikleri tamamla
+            updated = False
+            for k, v in self.DEFAULT_SETTINGS.items():
+                if k not in data:
+                    data[k] = v
+                    updated = True
+
+            # Kararlılık güncellemeleri: ocr_engine, enable_radial_menu, enable_in_place
+            if data.get("ocr_engine") == "auto":
+                data["ocr_engine"] = "rapid_paddle"
+                updated = True
+            if data.get("enable_radial_menu") is True:
+                data["enable_radial_menu"] = False
+                updated = True
+            if data.get("enable_in_place") is True:
+                data["enable_in_place"] = False
+                updated = True
+
+            if updated:
+                self._save_settings(data)
+            return data
         except Exception:
+            return dict(self.DEFAULT_SETTINGS)
             return dict(self.DEFAULT_SETTINGS)
 
     def _save_settings(self, settings: dict):
