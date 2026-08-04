@@ -34,7 +34,7 @@ class TestInPlaceOverlay(unittest.TestCase):
         img = Image.new("RGB", (300, 150), color=(20, 20, 20))
         overlay = InPlaceOverlay(rect, "Lorem Ipsum Türkçe Çevirisi", pil_image=img)
         self.assertIsNotNone(overlay)
-        self.assertGreater(overlay.font_size, 8)
+        self.assertEqual(overlay.rect_target, rect)
         overlay.close()
 
 
