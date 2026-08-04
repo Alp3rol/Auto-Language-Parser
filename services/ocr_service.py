@@ -95,26 +95,11 @@ class OCRService:
             current_line.sort(key=lambda x: x[0][0][0])
             lines.append(current_line)
 
-        # Kelimeleri aralarında boşluk bırakarak birleştir
+        # Kelimeleri aralarında düzgün boşluk bırakarak birleştir
         line_texts = []
         for line in lines:
-            words_in_line = []
-            prev_right = None
-
-            for item in line:
-                box, text, _ = item
-                left = box[0][0]
-                right = box[1][0]
-
-                if prev_right is not None:
-                    gap = left - prev_right
-                    if gap > 3:
-                        words_in_line.append(" ")
-
-                words_in_line.append(text)
-                prev_right = right
-
-            full_line = "".join(words_in_line).strip()
+            words_in_line = [item[1].strip() for item in line if item and item[1] and item[1].strip()]
+            full_line = " ".join(words_in_line).strip()
             if full_line:
                 line_texts.append(full_line)
 
