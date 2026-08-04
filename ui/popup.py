@@ -11,10 +11,12 @@ class TranslationPopup(QWidget):
     A.L.P. Premium Obsidian Dark Çeviri Popup Penceresi.
     - Sade, mat koyu zemin (#18181B) ve ince şık gri çerçeve (#3F3F46)
     - Göze hitap eden sade dil rozeti (EN ➔ TR) ve aksiyon butonları
-    - Yumuşak koyu gölge efekti ve yüksek okunabilirlikte tipografi
+    - Raptiye (Pin/Sticky Note) modu ile ekranda sabitleme ve sürükleme
+    - Hızlı AI Aksiyon Butonları (Özetle, Hata Açıkla, Yanıt Taslağı)
     """
     copy_requested = Signal(str)
     speak_requested = Signal(str, str)
+    ai_action_requested = Signal(str, str)
 
     def __init__(self, original_text: str, translated_text: str, source_lang: str, target_lang: str, rect: QRect, duration_sec: int = 6, is_text_selection: bool = False):
         super().__init__()
@@ -24,6 +26,9 @@ class TranslationPopup(QWidget):
         self.target_lang = target_lang or "tr"
         self.rect_target = rect
         self.is_text_selection = is_text_selection
+        self.duration_sec = duration_sec
+        self.is_pinned = False
+        self.drag_position = None
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
@@ -38,10 +43,11 @@ class TranslationPopup(QWidget):
         self.apply_shadow_effect()
         self.fit_to_selection_rect(rect)
 
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.close)
+
         if duration_sec > 0:
-            self.timer = QTimer(self)
-            self.timer.setSingleShot(True)
-            self.timer.timeout.connect(self.close)
             self.timer.start(duration_sec * 1000)
 
     def setup_ui(self, translated_text: str):
@@ -68,7 +74,7 @@ class TranslationPopup(QWidget):
 
         card_layout = QVBoxLayout(self.container)
         card_layout.setContentsMargins(12, 8, 12, 8)
-        card_layout.setSpacing(6)
+        card_layout.setSpacing(8)
 
         # 1. Başlık Barı (Header)
         header = QHBoxLayout()
@@ -92,6 +98,27 @@ class TranslationPopup(QWidget):
         header.addWidget(self.badge)
 
         header.addStretch()
+
+        # Raptiye (Pin) Butonu
+        self.btn_pin = QPushButton("📌")
+        self.btn_pin.setToolTip("Ekrana Sabitle (Pin)")
+        self.btn_pin.setFixedSize(22, 22)
+        self.btn_pin.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_pin.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                font-size: 11px;
+                color: #A1A1AA;
+            }
+            QPushButton:hover {
+                background-color: #27272A;
+                color: #38BDF8;
+                border-radius: 4px;
+            }
+        """)
+        self.btn_pin.clicked.connect(self.toggle_pin)
+        header.addWidget(self.btn_pin)
 
         # Sesli Okuma Butonu
         btn_speak = QPushButton("🔊")
@@ -171,18 +198,90 @@ class TranslationPopup(QWidget):
         self.trans_label.setStyleSheet(f"color: #F4F4F5; font-size: {font_size}px; font-weight: 600; line-height: 1.4;")
         card_layout.addWidget(self.trans_label)
 
+        # 3. Hızlı AI Aksiyon Butonları Alanı
+        ai_bar = QHBoxLayout()
+        ai_bar.setContentsMargins(0, 4, 0, 0)
+        ai_bar.setSpacing(6)
+
+        ai_actions = [
+            ("📝 Özetle", "summarize", "Metni 3 kısa maddede özetler"),
+            ("🐞 Hata Açıkla", "explain_error", "Kod/sistem hatasını analiz eder"),
+            ("✉️ Yanıt Yaz", "draft_reply", "Mesaja uygun yanıt taslağı oluşturur")
+        ]
+
+        btn_style = """
+            QPushButton {
+                background-color: #27272A;
+                color: #A1A1AA;
+                border: 1px solid #3F3F46;
+                border-radius: 6px;
+                padding: 3px 8px;
+                font-size: 10.5px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #3F3F46;
+                color: #38BDF8;
+                border-color: #38BDF8;
+            }
+        """
+
+        for label_str, act_key, tooltip in ai_actions:
+            btn_act = QPushButton(label_str)
+            btn_act.setToolTip(tooltip)
+            btn_act.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_act.setStyleSheet(btn_style)
+            btn_act.clicked.connect(lambda _, key=act_key: self.ai_action_requested.emit(key, self.original_text or self.translated_text))
+            ai_bar.addWidget(btn_act)
+
+        card_layout.addLayout(ai_bar)
+
         main_layout.addWidget(self.container)
 
         self.container.installEventFilter(self)
         self.trans_label.installEventFilter(self)
+
+    def toggle_pin(self):
+        """Raptiye durumunu değiştirir (Ekranda sabit tutar/otomatik kapanmayı ayarlar)."""
+        self.is_pinned = not self.is_pinned
+        if self.is_pinned:
+            self.timer.stop()
+            self.btn_pin.setStyleSheet("""
+                QPushButton {
+                    background-color: #0078D4;
+                    color: #FFFFFF;
+                    border: none;
+                    font-size: 11px;
+                    border-radius: 4px;
+                }
+            """)
+            self.btn_pin.setToolTip("Sabitlemeyi Kaldır")
+        else:
+            self.btn_pin.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    border: none;
+                    font-size: 11px;
+                    color: #A1A1AA;
+                }
+                QPushButton:hover {
+                    background-color: #27272A;
+                    color: #38BDF8;
+                    border-radius: 4px;
+                }
+            """)
+            self.btn_pin.setToolTip("Ekrana Sabitle (Pin)")
+            if self.duration_sec > 0:
+                self.timer.start(self.duration_sec * 1000)
 
     def eventFilter(self, watched, event):
         if event.type() == QEvent.Type.MouseButtonPress:
             if event.button() == Qt.MouseButton.LeftButton:
                 btn_class_name = watched.metaObject().className()
                 if btn_class_name != "QPushButton":
-                    self.copy_and_close()
-                    return True
+                    if not self.is_pinned:
+                        self.copy_and_close()
+                        return True
         return super().eventFilter(watched, event)
 
     def apply_shadow_effect(self):
@@ -253,8 +352,18 @@ class TranslationPopup(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.copy_and_close()
+            if self.is_pinned:
+                self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                event.accept()
+            else:
+                self.copy_and_close()
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self.is_pinned and event.buttons() == Qt.MouseButton.LeftButton and self.drag_position is not None:
+            self.move(event.globalPosition().toPoint() - self.drag_position)
+            event.accept()
+        super().mouseMoveEvent(event)
 
 
 class LoadingPopup(QWidget):

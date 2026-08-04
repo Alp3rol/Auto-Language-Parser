@@ -42,13 +42,15 @@ python main.py
 
 ---
 
-## ⌨️ Kullanım Kısayolları
+## ⌨️ Kullanım Kısayolları (Ayarlar Sekmesinden Özelleştirilebilir)
 
-| Kısayol | Açıklama |
+| Varsayılan Kısayol | Açıklama |
 | :--- | :--- |
-| **`Alt + S`** | Ekran seçim arayüzünü açar. |
-| **`F8`** | Alternatif tek tuşla seçim arayüzünü açar. |
+| **`Alt + S`** | Ekran seçim arayüzünü açar. *(Özelleştirilebilir)* |
+| **`Alt + C`** | Ekranda seçili metni imleç konumunda çevirir. *(Özelleştirilebilir)* |
 | **`ESC`** | Seçim modunu iptal eder. |
+
+> 💡 *Not: Tüm kısayolları **Ayarlar ⚙️ ➔ Kısayol Kaydedici** butonlarına basarak dilediğiniz tuş kombinasyonuna dönüştürebilirsiniz.*
 
 ---
 

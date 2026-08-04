@@ -120,11 +120,54 @@ class OCRService:
 
         return "\n".join(line_texts)
 
-    def extract_text(self, pil_image: Image.Image) -> str:
+    def is_winocr_available(self) -> bool:
+        """Windows Native OCR kütüphanesinin ve dil paketinin kullanılabilirliğini kontrol eder."""
+        try:
+            import winocr
+            langs = [l.language_tag for l in winocr.OcrEngine.available_recognizer_languages]
+            return len(langs) > 0
+        except Exception:
+            return False
+
+    def extract_text_winocr(self, pil_image: Image.Image) -> str:
+        """
+        Windows 10/11 Dahili WinRT OCR motoru ile 0-RAM ve yıldırım hızında metin çıkarma.
+        """
+        if pil_image is None:
+            return ""
+        try:
+            import winocr
+            langs = [l.language_tag for l in winocr.OcrEngine.available_recognizer_languages]
+            if not langs:
+                return ""
+            
+            target_lang = langs[0]
+            res = winocr.recognize_pil_sync(pil_image, target_lang)
+            if not res:
+                return ""
+
+            if isinstance(res, dict):
+                return res.get("text", "").strip()
+            elif hasattr(res, "text") and res.text:
+                return res.text.strip()
+            elif hasattr(res, "lines"):
+                lines = [line.text for line in res.lines if hasattr(line, "text") and line.text]
+                return "\n".join(lines).strip()
+        except Exception as e:
+            print(f"[WINOCR UYARISI] WinOCR yürütülemedi: {e}")
+        return ""
+
+    def extract_text(self, pil_image: Image.Image, engine: str = "auto") -> str:
         if pil_image is None:
             return ""
 
-        # Görüntüyü OCR kalitesini artıracak şekilde ön işlemeden geçir
+        # 1. WinOCR Modu veya Auto Modunda WinOCR Önceliği
+        if engine in ("winocr", "auto") and self.is_winocr_available():
+            win_text = self.extract_text_winocr(pil_image)
+            if win_text and win_text.strip():
+                return win_text
+
+        # 2. Görüntüyü OCR kalitesini artıracak şekilde ön işlemeden geçir ve Paddle/RapidOCR çalıştır
         processed_img = self.preprocess_image(pil_image)
         img_np = np.array(processed_img)
 

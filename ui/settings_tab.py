@@ -433,9 +433,19 @@ class SettingsTab(QWidget):
         self.cmb_duration.addItem("10 Saniye", 10)
         clang_layout.addWidget(self.cmb_duration)
 
+        lbl_ocr_eng = QLabel("OCR Motor Seçimi:")
+        lbl_ocr_eng.setStyleSheet("font-size: 12px; font-weight: 600; color: #F4F4F5; margin-top: 4px;")
+        clang_layout.addWidget(lbl_ocr_eng)
+
+        self.cmb_ocr_engine = QComboBox()
+        self.cmb_ocr_engine.addItem("⚡ Otomatik (WinOCR ➔ RapidOCR Akıllı Geçiş)", "auto")
+        self.cmb_ocr_engine.addItem("🚀 Windows 11 Native WinOCR (0-RAM & Ultra Hız)", "winocr")
+        self.cmb_ocr_engine.addItem("🔍 RapidOCR / Native PaddleOCR Engine", "rapid_paddle")
+        clang_layout.addWidget(self.cmb_ocr_engine)
+
         lang_layout.addWidget(card_lang)
         lang_layout.addStretch()
-        self.sub_tabs.addTab(tab_lang, "🌐 Dil")
+        self.sub_tabs.addTab(tab_lang, "🌐 Dil & OCR")
 
         # ====================================================
         # SEKME 5: 🚀 Next-Gen Özellikler
@@ -565,6 +575,11 @@ class SettingsTab(QWidget):
         if idx_target >= 0:
             self.cmb_target_lang.setCurrentIndex(idx_target)
 
+        ocr_engine = self.settings_service.get("ocr_engine", "auto")
+        idx_ocr = self.cmb_ocr_engine.findData(ocr_engine)
+        if idx_ocr >= 0:
+            self.cmb_ocr_engine.setCurrentIndex(idx_ocr)
+
     def save_settings(self):
         self.settings_service.set("auto_copy", self.chk_auto_copy.isChecked())
         self.settings_service.set("auto_tts", self.chk_auto_tts.isChecked())
@@ -589,6 +604,7 @@ class SettingsTab(QWidget):
         self.settings_service.set("auto_detect_src", self.chk_auto_detect.isChecked())
         self.settings_service.set("target_lang", self.cmb_target_lang.currentData())
         self.settings_service.set("popup_duration", self.cmb_duration.currentData())
+        self.settings_service.set("ocr_engine", self.cmb_ocr_engine.currentData())
 
         self.settings_saved.emit()
 

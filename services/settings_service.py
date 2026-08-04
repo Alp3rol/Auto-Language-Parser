@@ -28,7 +28,8 @@ class SettingsService:
         "enable_context_ai": True,
         "enable_hover_dict": True,
         "hover_delay_ms": 400,
-        "enable_vocab_builder": True
+        "enable_vocab_builder": True,
+        "ocr_engine": "auto"
     }
 
     def __init__(self, data_dir: str = None):

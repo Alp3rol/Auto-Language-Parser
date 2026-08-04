@@ -56,15 +56,15 @@ class TrayManager(QObject):
         show_action.triggered.connect(callbacks.get("show"))
         menu.addAction(show_action)
 
-        select_action = QAction("Seçim Yap (Alt+S / F8)", self.parent_window)
-        select_action.triggered.connect(callbacks.get("crop"))
-        menu.addAction(select_action)
+        self.select_action = QAction("Seçim Yap (Alt+S)", self.parent_window)
+        self.select_action.triggered.connect(callbacks.get("crop"))
+        menu.addAction(self.select_action)
 
-        sel_translate_action = QAction(
+        self.sel_translate_action = QAction(
             "📋 Seçili Metni Çevir (Alt+C)", self.parent_window
         )
-        sel_translate_action.triggered.connect(callbacks.get("selection"))
-        menu.addAction(sel_translate_action)
+        self.sel_translate_action.triggered.connect(callbacks.get("selection"))
+        menu.addAction(self.sel_translate_action)
 
         live_action = QAction("📺 Canlı Çeviri Modu", self.parent_window)
         live_action.triggered.connect(callbacks.get("live"))
@@ -78,6 +78,13 @@ class TrayManager(QObject):
         self.tray_icon.setContextMenu(menu)
         self.tray_icon.activated.connect(self._on_tray_activated)
         self.tray_icon.show()
+
+    def update_menu_labels(self, crop_preset: str = "Alt+S", sel_preset: str = "Alt+C"):
+        """Sistem tepsisindeki menü kısayol metinlerini dinamik olarak günceller."""
+        if hasattr(self, "select_action") and self.select_action:
+            self.select_action.setText(f"Seçim Yap ({crop_preset})")
+        if hasattr(self, "sel_translate_action") and self.sel_translate_action:
+            self.sel_translate_action.setText(f"📋 Seçili Metni Çevir ({sel_preset})")
 
     def _on_tray_activated(self, reason):
         if reason in (

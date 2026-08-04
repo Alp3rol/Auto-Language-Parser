@@ -88,19 +88,19 @@ class FloatingWidget(QWidget):
         c_layout.addWidget(drag_handle)
 
         # 1. Tek Tık Ekran Çevirisi Butonu
-        btn_capture = QPushButton("🎯")
-        btn_capture.setToolTip("Ekran Çevirisi Yap (Alt+S)")
-        btn_capture.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_capture.clicked.connect(self.capture_requested.emit)
-        c_layout.addWidget(btn_capture)
+        self.btn_capture = QPushButton("🎯")
+        self.btn_capture.setToolTip("Ekran Çevirisi Yap (Alt+S)")
+        self.btn_capture.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_capture.clicked.connect(self.capture_requested.emit)
+        c_layout.addWidget(self.btn_capture)
 
         # 2. Seçili Metni Çevir Butonu
-        btn_selection = QPushButton("📋")
-        btn_selection.setObjectName("btnSel")
-        btn_selection.setToolTip("Ekranda Seçili Metni Çevir (Alt+C)")
-        btn_selection.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_selection.clicked.connect(self.selection_requested.emit)
-        c_layout.addWidget(btn_selection)
+        self.btn_selection = QPushButton("📋")
+        self.btn_selection.setObjectName("btnSel")
+        self.btn_selection.setToolTip("Ekranda Seçili Metni Çevir (Alt+C)")
+        self.btn_selection.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_selection.clicked.connect(self.selection_requested.emit)
+        c_layout.addWidget(self.btn_selection)
 
         # 3. Canlı Altyazı Modu Butonu
         btn_live = QPushButton("📺")
@@ -124,6 +124,13 @@ class FloatingWidget(QWidget):
         btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_close.clicked.connect(self.hide_widget)
         c_layout.addWidget(btn_close)
+
+    def update_tooltips(self, crop_preset: str = "Alt+S", sel_preset: str = "Alt+C"):
+        """Dinamik kısayol ayarlarını buton ipuçlarına (tooltip) yansıtır."""
+        if hasattr(self, 'btn_capture'):
+            self.btn_capture.setToolTip(f"Ekran Çevirisi Yap ({crop_preset})")
+        if hasattr(self, 'btn_selection'):
+            self.btn_selection.setToolTip(f"Ekranda Seçili Metni Çevir ({sel_preset})")
 
     def set_opacity_percent(self, opacity: int):
         self.setWindowOpacity(max(0.3, min(1.0, opacity / 100.0)))

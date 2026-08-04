@@ -53,7 +53,7 @@ class TranslationWorkerThread(QThread):
     error = Signal(str)
 
     def __init__(self, rect: QRect, physical_coords: tuple, ocr_service: OCRService,
-                 translate_service: TranslationService, target_lang: str = "tr", auto_detect: bool = True):
+                 translate_service: TranslationService, target_lang: str = "tr", auto_detect: bool = True, ocr_engine: str = "auto"):
         super().__init__()
         self.rect = rect
         self.physical_coords = physical_coords
@@ -61,11 +61,12 @@ class TranslationWorkerThread(QThread):
         self.translate_service = translate_service
         self.target_lang = target_lang
         self.auto_detect = auto_detect
+        self.ocr_engine = ocr_engine
 
     def run(self):
         try:
             pil_img = capture_screen_area(self.rect)
-            ocr_text = self.ocr_service.extract_text(pil_img)
+            ocr_text = self.ocr_service.extract_text(pil_img, engine=self.ocr_engine)
 
             if not ocr_text or not ocr_text.strip():
                 self.finished.emit("", "", "auto", self.target_lang, self.rect, self.physical_coords)
@@ -112,7 +113,7 @@ class LiveTranslationWorkerThread(QThread):
     error = Signal(str)
 
     def __init__(self, rect: QRect, ocr_service: OCRService, translate_service: TranslationService,
-                 interval: float = 2.0, skip_unchanged: bool = True, target_lang: str = "tr", auto_detect: bool = True):
+                 interval: float = 2.0, skip_unchanged: bool = True, target_lang: str = "tr", auto_detect: bool = True, ocr_engine: str = "auto"):
         super().__init__()
         self.rect = rect
         self.ocr_service = ocr_service
@@ -121,6 +122,7 @@ class LiveTranslationWorkerThread(QThread):
         self.skip_unchanged = skip_unchanged
         self.target_lang = target_lang
         self.auto_detect = auto_detect
+        self.ocr_engine = ocr_engine
 
         self.is_running = True
         self.is_paused = False
@@ -154,7 +156,7 @@ class LiveTranslationWorkerThread(QThread):
                             continue
                         self.last_img_hash = img_hash
 
-                    ocr_text = self.ocr_service.extract_text(pil_img)
+                    ocr_text = self.ocr_service.extract_text(pil_img, engine=self.ocr_engine)
 
                     if ocr_text and ocr_text.strip():
                         if not (self.skip_unchanged and ocr_text.strip() == self.last_ocr_text.strip()):
@@ -221,6 +223,7 @@ class MainWindow(QMainWindow):
         self.setup_tray()
         self.setup_pynput_hotkey()
         self.setup_floating_widget()
+        self.update_shortcut_labels()
 
         # Otomatik Pano Takibi Dinleyicisi
         QApplication.clipboard().dataChanged.connect(self.on_clipboard_data_changed)
@@ -490,10 +493,25 @@ class MainWindow(QMainWindow):
         else:
             self.floating_widget.hide()
 
+    def update_shortcut_labels(self):
+        """Aktif kısayol ayarlarını arayüzdeki tüm durumlara ve araç çubuklarına dinamik yansıtır."""
+        crop_preset = self.settings_service.get("hotkey_preset", "Alt+S")
+        sel_preset = self.settings_service.get("selection_translate_hotkey", "Alt+C")
+
+        if hasattr(self, 'status_label') and self.status_label:
+            self.status_label.setText(f"Kısayola basıp ({crop_preset}) ekran alanı veya metin seçip ({sel_preset}) çevirin.")
+
+        if hasattr(self, 'floating_widget') and self.floating_widget:
+            self.floating_widget.update_tooltips(crop_preset, sel_preset)
+
+        if hasattr(self, 'tray_manager') and self.tray_manager:
+            self.tray_manager.update_menu_labels(crop_preset, sel_preset)
+
     def on_settings_saved(self):
         self.setup_shortcuts()
         self.setup_pynput_hotkey()
         self.setup_floating_widget()
+        self.update_shortcut_labels()
 
     def _cleanup_thread(self, thread_attr: str):
         thread = getattr(self, thread_attr, None)
@@ -567,6 +585,23 @@ class MainWindow(QMainWindow):
         self.active_popup = TranslationPopup(original_text, translated, src_lang, tgt_lang, rect, duration_sec=duration, is_text_selection=True)
         self.active_popup.copy_requested.connect(lambda text: safe_set_clipboard(text))
         self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
+        self.active_popup.ai_action_requested.connect(self.on_ai_action_requested)
+        self.active_popup.show()
+
+    def on_ai_action_requested(self, action_type: str, target_text: str):
+        result_text = self.context_engine.process_ai_action(action_type, target_text, translate_service=self.translate_service)
+        
+        rect = QRect(QCursor.pos().x(), QCursor.pos().y(), 360, 120)
+        if self.active_popup and self.active_popup.isVisible():
+            rect = self.active_popup.geometry()
+
+        self._clear_active_popup()
+        self.active_popup = TranslationPopup(target_text, result_text, "ai", "tr", rect, duration_sec=0)
+        if not self.active_popup.is_pinned:
+            self.active_popup.toggle_pin()
+        self.active_popup.copy_requested.connect(lambda text: safe_set_clipboard(text))
+        self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
+        self.active_popup.ai_action_requested.connect(self.on_ai_action_requested)
         self.active_popup.show()
 
     def on_clipboard_data_changed(self):
@@ -728,11 +763,12 @@ class MainWindow(QMainWindow):
             skip_unchanged = self.settings_service.get("live_skip_unchanged", True)
             target_lang = self.settings_service.get("target_lang", "tr")
             auto_detect = self.settings_service.get("auto_detect_src", True)
+            ocr_engine = self.settings_service.get("ocr_engine", "auto")
 
             self.live_thread = LiveTranslationWorkerThread(
                 rect, self.ocr_service, self.translate_service,
                 interval=interval, skip_unchanged=skip_unchanged,
-                target_lang=target_lang, auto_detect=auto_detect
+                target_lang=target_lang, auto_detect=auto_detect, ocr_engine=ocr_engine
             )
             self.live_thread.translation_updated.connect(self.on_live_translation_updated)
             self.live_thread.start()
@@ -751,11 +787,12 @@ class MainWindow(QMainWindow):
 
         target_lang = self.settings_service.get("target_lang", "tr")
         auto_detect = self.settings_service.get("auto_detect_src", True)
+        ocr_engine = self.settings_service.get("ocr_engine", "auto")
 
         self._cleanup_thread('worker_thread')
         self.worker_thread = TranslationWorkerThread(
             rect, physical_coords, self.ocr_service, self.translate_service,
-            target_lang=target_lang, auto_detect=auto_detect
+            target_lang=target_lang, auto_detect=auto_detect, ocr_engine=ocr_engine
         )
         self.worker_thread.finished.connect(self.on_translation_finished)
         self.worker_thread.error.connect(self.on_translation_error)
@@ -835,6 +872,7 @@ class MainWindow(QMainWindow):
             self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
             self.active_popup.copy_requested.connect(lambda text: safe_set_clipboard(text))
             self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
+            self.active_popup.ai_action_requested.connect(self.on_ai_action_requested)
             self.active_popup.show()
 
     def on_translation_error(self, error_msg: str):
@@ -868,9 +906,12 @@ def main():
     window = MainWindow()
     window.hide()
 
+    crop_preset = window.settings_service.get("hotkey_preset", "Alt+S")
+    sel_preset = window.settings_service.get("selection_translate_hotkey", "Alt+C")
+
     window.tray_manager.show_message(
         "A.L.P. (Auto Language Parser)",
-        "Uygulama arka planda ve sistem tepsisinde aktif.\nKısayollar: Alt+S (Kırp) veya Alt+C (Seçili Metin)",
+        f"Uygulama arka planda ve sistem tepsisinde aktif.\nKısayollar: {crop_preset} (Kırp) veya {sel_preset} (Seçili Metin)",
         QSystemTrayIcon.MessageIcon.Information,
         3000
     )
