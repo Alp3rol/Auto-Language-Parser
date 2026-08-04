@@ -481,6 +481,10 @@ class SettingsTab(QWidget):
         self.chk_enable_vocab_builder.setObjectName("stitchToggle")
         cng_layout.addWidget(self.chk_enable_vocab_builder)
 
+        self.chk_enable_radial_menu = QCheckBox("⭕ Dairesel Aksiyon Menüsü (Radial Quick Menu)")
+        self.chk_enable_radial_menu.setObjectName("stitchToggle")
+        cng_layout.addWidget(self.chk_enable_radial_menu)
+
         ng_layout.addWidget(card_ng)
         ng_layout.addStretch()
         self.sub_tabs.addTab(tab_nextgen, "🚀 Next-Gen")
@@ -555,11 +559,13 @@ class SettingsTab(QWidget):
         enable_context_ai = self.settings_service.get("enable_context_ai", True)
         enable_hover_dict = self.settings_service.get("enable_hover_dict", True)
         enable_vocab_builder = self.settings_service.get("enable_vocab_builder", True)
+        enable_radial_menu = self.settings_service.get("enable_radial_menu", True)
 
         self.chk_enable_in_place.setChecked(enable_in_place)
         self.chk_enable_context_ai.setChecked(enable_context_ai)
         self.chk_enable_hover_dict.setChecked(enable_hover_dict)
         self.chk_enable_vocab_builder.setChecked(enable_vocab_builder)
+        self.chk_enable_radial_menu.setChecked(enable_radial_menu)
 
         idx_dur = self.cmb_duration.findData(duration)
         if idx_dur >= 0:
@@ -588,6 +594,7 @@ class SettingsTab(QWidget):
         self.settings_service.set("enable_context_ai", self.chk_enable_context_ai.isChecked())
         self.settings_service.set("enable_hover_dict", self.chk_enable_hover_dict.isChecked())
         self.settings_service.set("enable_vocab_builder", self.chk_enable_vocab_builder.isChecked())
+        self.settings_service.set("enable_radial_menu", self.chk_enable_radial_menu.isChecked())
         self.settings_service.set("hotkey_preset", self.btn_hotkey_crop.current_hotkey)
 
         self.settings_service.set("enable_selection_translation", self.chk_enable_selection.isChecked())

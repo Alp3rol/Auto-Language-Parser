@@ -29,7 +29,9 @@ class SettingsService:
         "enable_hover_dict": True,
         "hover_delay_ms": 400,
         "enable_vocab_builder": True,
-        "ocr_engine": "auto"
+        "ocr_engine": "auto",
+        "enable_radial_menu": True,
+        "enable_hover_lookup": True
     }
 
     def __init__(self, data_dir: str = None):

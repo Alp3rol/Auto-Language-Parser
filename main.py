@@ -20,6 +20,7 @@ from ui.settings_tab import SettingsTab
 from ui.vocab_tab import VocabTab
 from ui.hover_tooltip import HoverTooltip
 from ui.in_place_overlay import InPlaceOverlay
+from ui.radial_menu import RadialMenu
 from ui.tray_manager import TrayManager, create_app_icon
 from services.capture import capture_screen_area
 from services.ocr_service import OCRService
@@ -859,6 +860,18 @@ class MainWindow(QMainWindow):
         display_content = f"【Orijinal Metin ({src_lang.upper()})】:\n{ocr_text}\n\n【Çeviri ({tgt_lang.upper()})】:\n{translated}"
         self.text_display.setText(display_content)
 
+        if self.settings_service.get("enable_radial_menu", True):
+            if hasattr(self, 'radial_menu') and self.radial_menu:
+                try:
+                    self.radial_menu.close()
+                except Exception:
+                    pass
+            self.radial_menu = RadialMenu()
+            self.radial_menu.action_selected.connect(
+                lambda act: self.handle_radial_action(act, ocr_text, translated, src_lang, tgt_lang, rect)
+            )
+            self.radial_menu.show_at_position(rect.center())
+
         if self.settings_service.get("enable_in_place", True):
             if self.in_place_overlay is not None:
                 try:
@@ -870,6 +883,33 @@ class MainWindow(QMainWindow):
         else:
             duration = self.settings_service.get("popup_duration", 0)
             self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
+            self.active_popup.copy_requested.connect(lambda text: safe_set_clipboard(text))
+            self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
+            self.active_popup.ai_action_requested.connect(self.on_ai_action_requested)
+            self.active_popup.show()
+
+    def handle_radial_action(self, action_key: str, ocr_text: str, translated: str, src_lang: str, tgt_lang: str, rect: QRect):
+        """Radial Menü üzerindeki dairesel buton aksiyonlarını yürütür."""
+        if action_key == "speak":
+            self.tts_service.speak(translated, tgt_lang)
+        elif action_key == "copy":
+            safe_set_clipboard(translated)
+            self.status_label.setText("📋 Çeviri panoya kopyalandı!")
+            self.status_label.setStyleSheet("color: #00FF88; font-weight: bold;")
+        elif action_key == "ai_explain":
+            self.on_ai_action_requested("summarize", ocr_text or translated)
+        elif action_key == "vocab":
+            self.vocab_service.add_word(ocr_text, translated, src_lang, tgt_lang)
+            self.vocab_tab.load_due_cards()
+            self.vocab_tab.load_vocab_table()
+            self.status_label.setText("🎴 Kelime kartlarına başarıyla eklendi!")
+            self.status_label.setStyleSheet("color: #00FF88; font-weight: bold;")
+        elif action_key == "pin":
+            duration = self.settings_service.get("popup_duration", 0)
+            self._clear_active_popup()
+            self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
+            if not self.active_popup.is_pinned:
+                self.active_popup.toggle_pin()
             self.active_popup.copy_requested.connect(lambda text: safe_set_clipboard(text))
             self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
             self.active_popup.ai_action_requested.connect(self.on_ai_action_requested)
