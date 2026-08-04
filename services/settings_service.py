@@ -10,7 +10,25 @@ class SettingsService:
         "auto_copy": True,
         "auto_tts": False,
         "popup_duration": 0,
-        "hotkey_preset": "Alt+S"
+        "hotkey_preset": "Alt+S",
+        "enable_live_mode": True,
+        "live_interval": 2.0,
+        "live_skip_unchanged": True,
+        "show_floating_widget": True,
+        "floating_opacity": 90,
+        "enable_hotkeys": True,
+        "selection_hotkey": "<alt>+s",
+        "live_hotkey": "<ctrl>+<alt>+l",
+        "target_lang": "tr",
+        "auto_detect_src": True,
+        "enable_selection_translation": True,
+        "auto_clipboard_translate": False,
+        "selection_translate_hotkey": "Alt+C",
+        "enable_in_place": True,
+        "enable_context_ai": True,
+        "enable_hover_dict": True,
+        "hover_delay_ms": 400,
+        "enable_vocab_builder": True
     }
 
     def __init__(self, data_dir: str = None):

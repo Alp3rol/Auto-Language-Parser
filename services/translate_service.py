@@ -2,18 +2,43 @@ import requests
 from urllib.parse import quote
 
 
+from services.privacy_service import PrivacyService
+
+
 class TranslationService:
     """
     LibreTranslate API'sini kullanarak OCR ile okunan metnin dilini otomatik tahmin eden,
     İngilizce ise Türkçeye, Türkçe ise İngilizceye çeviren servis.
     """
-    def __init__(self):
+    SUPPORTED_LANGUAGES = {
+        "tr": "Türkçe 🇹🇷",
+        "en": "İngilizce 🇬🇧",
+        "de": "Almanca 🇩🇪",
+        "fr": "Fransızca 🇫🇷",
+        "es": "İspanyolca 🇪🇸",
+        "it": "İtalyanca 🇮🇹",
+        "ru": "Rusça 🇷🇺",
+        "ja": "Japonca 🇯🇵",
+        "ko": "Korece 🇰🇷",
+        "zh": "Çince 🇨🇳",
+        "ar": "Arapça 🇸🇦",
+        "pt": "Portekizce 🇵🇹",
+        "nl": "Hollandaca 🇳🇱",
+        "pl": "Lehçe 🇵🇱",
+        "sv": "İsveççe 🇸🇪",
+        "uk": "Ukraynaca 🇺🇦",
+        "el": "Yunanaca 🇬🇷",
+        "hi": "Hintçe 🇮🇳"
+    }
+
+    def __init__(self, privacy_service: PrivacyService = None):
         # Ücretsiz LibreTranslate kamuya açık uç noktaları
         self.libre_endpoints = [
             "https://libretranslate.de/translate",
             "https://translate.argosopentech.com/translate",
             "https://libretranslate.com/translate"
         ]
+        self.privacy_service = privacy_service or PrivacyService()
 
     def detect_language(self, text: str) -> str:
         """Metindeki karakterlerden ve Türkçe kelimelerden sezgisel dil tahmini yapar."""
@@ -71,38 +96,42 @@ class TranslationService:
                 cleaned_paragraphs.append(cleaned_p)
         return "\n\n".join(cleaned_paragraphs)
 
-    def translate(self, text: str) -> tuple[str, str, str]:
+    def translate(self, text: str, target_lang: str = "tr", auto_detect: bool = True) -> tuple[str, str, str]:
         """
         Metni çevirir.
         Döndürür: (translated_text, source_lang, target_lang)
-        Otomatik yön düzeltmesi: Eğer algılanan kaynak dil ile hedef dil aynı ise (örn: TR->TR),
-        hedef dili otomatik olarak tersine çevirir (TR->EN).
         """
         if not text or not text.strip():
-            return "", "auto", "tr"
+            return "", "auto", target_lang or "tr"
+
+        # Privacy Shield: Dış sunucuya gönderilmeden önce metindeki hassas bilgileri (API key, email vs.) maskele
+        text = self.privacy_service.mask_text(text)
 
         # OCR yapay satır kırılmalarını temizleyerek Google Translate'e tek bütün cümle olarak gönder
         text = self.clean_text(text)
 
+
         source_lang = self.detect_language(text)
-        target_lang = "tr" if source_lang == "en" else "en"
+
+        if auto_detect:
+            # Otomatik Yön Düzeltmesi: Kaynak EN ise TR'ye, TR ise EN'e çevir, farklı dildeyse seçili hedef dile çevir.
+            if source_lang == "en" and target_lang == "en":
+                target_lang = "tr"
+            elif source_lang == "tr" and target_lang == "tr":
+                target_lang = "en"
 
         # 1. Hızlı Birincil Çeviri Servisi (Google Translate GTX)
         try:
             translated, detected_src = self._fetch_google(text, target_lang)
             if detected_src:
                 source_lang = detected_src
-                # Otomatik Yön Düzeltmesi: Kaynak Türkçe tespit edildiyse Hedef MUTLAKA İngilizce olmalı!
-                if source_lang == "tr" and target_lang == "tr":
-                    target_lang = "en"
-                    translated, _ = self._fetch_google(text, "en")
-                elif source_lang == "en" and target_lang == "en":
-                    target_lang = "tr"
-                    translated, _ = self._fetch_google(text, "tr")
-                elif source_lang == "tr":
-                    target_lang = "en"
-                elif source_lang == "en":
-                    target_lang = "tr"
+                if auto_detect:
+                    if source_lang == "tr" and target_lang == "tr":
+                        target_lang = "en"
+                        translated, _ = self._fetch_google(text, "en")
+                    elif source_lang == "en" and target_lang == "en":
+                        target_lang = "tr"
+                        translated, _ = self._fetch_google(text, "tr")
 
             if translated:
                 return translated, source_lang, target_lang
@@ -128,9 +157,8 @@ class TranslationService:
                         det = data.get("detectedLanguage", {})
                         if isinstance(det, dict) and "language" in det:
                             detected = str(det.get("language")).lower().split("-")[0]
-                            if detected in ("en", "tr"):
+                            if detected:
                                 source_lang = detected
-                                target_lang = "tr" if source_lang == "en" else "en"
                         return translated, source_lang, target_lang
             except Exception:
                 continue

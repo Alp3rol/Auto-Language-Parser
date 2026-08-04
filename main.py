@@ -1,26 +1,50 @@
 import os
 import sys
-from pynput import keyboard as pynput_keyboard
+import time
 
-from PySide6.QtCore import QObject, Signal, QRect, Qt, QThread, QEvent
-from PySide6.QtGui import QIcon, QPixmap, QColor, QPainter, QAction, QFont, QKeySequence, QShortcut, QGuiApplication
+from PySide6.QtCore import QObject, Signal, QRect, Qt, QThread, QEvent, QTimer, QPoint
+from PySide6.QtGui import QIcon, QPixmap, QColor, QPainter, QAction, QFont, QKeySequence, QShortcut, QGuiApplication, QCursor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QSystemTrayIcon, QMenu, QGroupBox, QTextEdit,
+    QPushButton, QLabel, QSystemTrayIcon, QMenu, QTextEdit,
     QTabWidget
 )
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ui.selection_overlay import SelectionOverlay
 from ui.popup import TranslationPopup, LoadingPopup, show_error_popup
+from ui.live_subtitle_overlay import LiveSubtitleOverlay
+from ui.floating_widget import FloatingWidget
 from ui.history_tab import HistoryTab
 from ui.settings_tab import SettingsTab
+from ui.vocab_tab import VocabTab
+from ui.hover_tooltip import HoverTooltip
+from ui.in_place_overlay import InPlaceOverlay
+from ui.tray_manager import TrayManager, create_app_icon
 from services.capture import capture_screen_area
 from services.ocr_service import OCRService
 from services.translate_service import TranslationService
 from services.tts_service import TTSService
 from services.history_service import HistoryService
 from services.settings_service import SettingsService
+from services.clipboard_service import ClipboardService
+from services.context_engine import ContextEngine
+from services.dictionary_service import DictionaryService
+from services.vocab_service import VocabService
+from services.privacy_service import PrivacyService
+from services.hotkey_manager import HotkeyManager
+
+
+
+def safe_set_clipboard(text: str):
+    """Panoya metin yazarken sinyalleri geçici olarak engelleyerek sonsuz kilitlenme döngüsünü önler."""
+    try:
+        cb = QApplication.clipboard()
+        cb.blockSignals(True)
+        cb.setText(text)
+        cb.blockSignals(False)
+    except Exception:
+        pass
 
 
 class TranslationWorkerThread(QThread):
@@ -28,12 +52,15 @@ class TranslationWorkerThread(QThread):
     finished = Signal(str, str, str, str, QRect, tuple)
     error = Signal(str)
 
-    def __init__(self, rect: QRect, physical_coords: tuple, ocr_service: OCRService, translate_service: TranslationService):
+    def __init__(self, rect: QRect, physical_coords: tuple, ocr_service: OCRService,
+                 translate_service: TranslationService, target_lang: str = "tr", auto_detect: bool = True):
         super().__init__()
         self.rect = rect
         self.physical_coords = physical_coords
         self.ocr_service = ocr_service
         self.translate_service = translate_service
+        self.target_lang = target_lang
+        self.auto_detect = auto_detect
 
     def run(self):
         try:
@@ -41,10 +68,12 @@ class TranslationWorkerThread(QThread):
             ocr_text = self.ocr_service.extract_text(pil_img)
 
             if not ocr_text or not ocr_text.strip():
-                self.finished.emit("", "", "auto", "tr", self.rect, self.physical_coords)
+                self.finished.emit("", "", "auto", self.target_lang, self.rect, self.physical_coords)
                 return
 
-            translated, src_lang, tgt_lang = self.translate_service.translate(ocr_text)
+            translated, src_lang, tgt_lang = self.translate_service.translate(
+                ocr_text, target_lang=self.target_lang, auto_detect=self.auto_detect
+            )
             self.finished.emit(ocr_text, translated, src_lang, tgt_lang, self.rect, self.physical_coords)
 
         except ConnectionError as ce:
@@ -53,58 +82,96 @@ class TranslationWorkerThread(QThread):
             self.error.emit(f"İşlem sırasında hata oluştu: {e}")
 
 
-class PynputHotkeyListener(QObject):
-    """Windows genelinde (Global) tuş dinleme sağlayan pynput dinleyicisi."""
-    triggered = Signal()
+class TextTranslationWorkerThread(QThread):
+    """Doğrudan seçili metni alan ve çeviri sonucunu imleç konumuna döndüren işçi sınıfı."""
+    finished = Signal(str, str, str, str, QPoint)
+    error = Signal(str)
 
-    def __init__(self):
+    def __init__(self, text: str, cursor_pos: QPoint, translate_service: TranslationService,
+                 target_lang: str = "tr", auto_detect: bool = True):
         super().__init__()
-        self.listener = None
+        self.text = text
+        self.cursor_pos = cursor_pos
+        self.translate_service = translate_service
+        self.target_lang = target_lang
+        self.auto_detect = auto_detect
 
-    def start(self):
-        def on_activate():
-            print("[PYNPUT] Global Kısayol Algılandı!")
-            self.triggered.emit()
-
-        hotkeys = {
-            '<alt>+s': on_activate,
-            '<ctrl>+<alt>+s': on_activate,
-            '<f8>': on_activate
-        }
-
+    def run(self):
         try:
-            self.listener = pynput_keyboard.GlobalHotKeys(hotkeys)
-            self.listener.start()
-            print("[BAŞARILI] Global Kısayol Dinleyicisi Aktif (Alt+S, Ctrl+Alt+S, F8)")
+            translated, src_lang, tgt_lang = self.translate_service.translate(
+                self.text, target_lang=self.target_lang, auto_detect=self.auto_detect
+            )
+            self.finished.emit(self.text, translated, src_lang, tgt_lang, self.cursor_pos)
         except Exception as e:
-            print(f"[HATA] Global kısayol dinleyicisi başlatılamadı: {e}")
+            self.error.emit(f"Metin çevirisi hatası: {e}")
+
+
+class LiveTranslationWorkerThread(QThread):
+    """Canlı altyazı modunda ekranı düzenli aralıklarla tarayan işçi sınıfı."""
+    translation_updated = Signal(str, str, str, str)
+    error = Signal(str)
+
+    def __init__(self, rect: QRect, ocr_service: OCRService, translate_service: TranslationService,
+                 interval: float = 2.0, skip_unchanged: bool = True, target_lang: str = "tr", auto_detect: bool = True):
+        super().__init__()
+        self.rect = rect
+        self.ocr_service = ocr_service
+        self.translate_service = translate_service
+        self.interval = max(0.5, interval)
+        self.skip_unchanged = skip_unchanged
+        self.target_lang = target_lang
+        self.auto_detect = auto_detect
+
+        self.is_running = True
+        self.is_paused = False
+        self.last_ocr_text = ""
+        self.last_img_hash = None
 
     def stop(self):
-        if self.listener:
-            self.listener.stop()
+        self.is_running = False
+
+    def set_paused(self, paused: bool):
+        self.is_paused = paused
+
+    def _compute_img_hash(self, pil_img):
+        if pil_img is None:
+            return None
+        # 16x16 thumbnail for fast image hash comparison before OCR
+        thumb = pil_img.resize((16, 16)).convert("L")
+        return thumb.tobytes()
+
+    def run(self):
+        while self.is_running:
+            if not self.is_paused:
+                try:
+                    pil_img = capture_screen_area(self.rect)
+
+                    # Görsel değişmediyse OCR çağrısını tamamen atla (95% CPU tasarrufu)
+                    if self.skip_unchanged:
+                        img_hash = self._compute_img_hash(pil_img)
+                        if img_hash and img_hash == self.last_img_hash:
+                            time.sleep(self.interval)
+                            continue
+                        self.last_img_hash = img_hash
+
+                    ocr_text = self.ocr_service.extract_text(pil_img)
+
+                    if ocr_text and ocr_text.strip():
+                        if not (self.skip_unchanged and ocr_text.strip() == self.last_ocr_text.strip()):
+                            self.last_ocr_text = ocr_text
+                            translated, src_lang, tgt_lang = self.translate_service.translate(
+                                ocr_text, target_lang=self.target_lang, auto_detect=self.auto_detect
+                            )
+                            self.translation_updated.emit(ocr_text, translated, src_lang, tgt_lang)
+                except Exception as e:
+                    print(f"[CANLI MOD UYARISI] {e}")
+
+            time.sleep(self.interval)
 
 
-def create_app_icon():
-    """Programatik olarak şık bir uygulama simgesi çizer."""
-    pixmap = QPixmap(64, 64)
-    pixmap.fill(QColor(0, 0, 0, 0))
 
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    painter.setBrush(QColor(0, 120, 212))
-    painter.setPen(QColor(0, 90, 160))
-    painter.drawEllipse(2, 2, 60, 60)
 
-    painter.setPen(QColor(255, 255, 255))
-    font = painter.font()
-    font.setPointSize(26)
-    font.setBold(True)
-    painter.setFont(font)
-    painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "T")
-    painter.end()
-
-    return QIcon(pixmap)
 
 
 class MainWindow(QMainWindow):
@@ -115,18 +182,34 @@ class MainWindow(QMainWindow):
         self.resize(540, 480)
         self.setWindowIcon(create_app_icon())
 
-        # Görev çubuğunda görünmemesi için Tool bayrağı ekle
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.Tool)
 
         # Servisleri başlat
+        self.privacy_service = PrivacyService()
         self.ocr_service = OCRService()
-        self.translate_service = TranslationService()
+        self.translate_service = TranslationService(privacy_service=self.privacy_service)
         self.tts_service = TTSService()
         self.history_service = HistoryService()
         self.settings_service = SettingsService()
+        self.clipboard_service = ClipboardService()
+        self.context_engine = ContextEngine()
+        self.dictionary_service = DictionaryService()
+        self.vocab_service = VocabService()
+        self.hover_tooltip = HoverTooltip()
+        self.in_place_overlay = None
+
 
         self.worker_thread = None
+        self.text_worker = None
+        self.live_thread = None
         self.active_popup = None
+        self.live_overlay = None
+        self.floating_widget = None
+        self.is_selecting_for_live = False
+        self._last_auto_clip = ""
+
+        self.last_translated_text = ""
+        self.last_target_lang = "tr"
 
         # Seçim Overlay bileşeni
         self.overlay = SelectionOverlay()
@@ -137,9 +220,15 @@ class MainWindow(QMainWindow):
         self.setup_shortcuts()
         self.setup_tray()
         self.setup_pynput_hotkey()
+        self.setup_floating_widget()
+
+        # Otomatik Pano Takibi Dinleyicisi
+        QApplication.clipboard().dataChanged.connect(self.on_clipboard_data_changed)
+
+        # Ayarlar kaydedildiğinde servisleri yeniden yükle
+        self.settings_tab.settings_saved.connect(self.on_settings_saved)
 
     def setup_ui(self):
-        # Frameless Window ile modern pencere başlık çubuğu
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
@@ -227,17 +316,19 @@ class MainWindow(QMainWindow):
         c_layout.setContentsMargins(10, 10, 10, 10)
         c_layout.setSpacing(10)
 
-        # 2. Linear/Raycast Stilinde Sekme Barı
         self.tabs = QTabWidget()
 
         # Sekme 1: Çeviri Kontrol Paneli
         translation_panel = QWidget()
         t_layout = QVBoxLayout(translation_panel)
-        t_layout.setSpacing(12)
-        t_layout.setContentsMargins(12, 12, 12, 12)
+        t_layout.setSpacing(10)
+        t_layout.setContentsMargins(10, 10, 10, 10)
 
-        # Ekran Seçimi Butonu
-        self.select_btn = QPushButton("🎯 Ekran Seçimi Yap (Alt+S veya F8)")
+        # Butonlar Yan Yana
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(8)
+
+        self.select_btn = QPushButton("🎯 Ekran Seçimi Yap")
         self.select_btn.setFixedHeight(40)
         self.select_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.select_btn.setStyleSheet("""
@@ -254,9 +345,51 @@ class MainWindow(QMainWindow):
             }
         """)
         self.select_btn.clicked.connect(self.start_selection_safe)
-        t_layout.addWidget(self.select_btn)
+        btn_layout.addWidget(self.select_btn, stretch=2)
 
-        # Son Çeviri Kartı (Sorunsuz Inset Card)
+        self.btn_translate_selection = QPushButton("📋 Seçili Metni Çevir")
+        self.btn_translate_selection.setFixedHeight(40)
+        self.btn_translate_selection.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_translate_selection.setStyleSheet("""
+            QPushButton {
+                background-color: #18181B;
+                color: #00FF88;
+                font-size: 12px;
+                font-weight: 700;
+                border-radius: 6px;
+                border: 1px solid #00FF88;
+            }
+            QPushButton:hover {
+                background-color: #00FF88;
+                color: #000000;
+            }
+        """)
+        self.btn_translate_selection.clicked.connect(self.translate_selected_text_at_cursor)
+        btn_layout.addWidget(self.btn_translate_selection, stretch=2)
+
+        self.live_btn = QPushButton("📺 Canlı Mod")
+        self.live_btn.setFixedHeight(40)
+        self.live_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.live_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #18181B;
+                color: #00E5FF;
+                font-size: 12px;
+                font-weight: 700;
+                border-radius: 6px;
+                border: 1px solid #00E5FF;
+            }
+            QPushButton:hover {
+                background-color: #00E5FF;
+                color: #000000;
+            }
+        """)
+        self.live_btn.clicked.connect(self.start_live_selection)
+        btn_layout.addWidget(self.live_btn, stretch=1)
+
+        t_layout.addLayout(btn_layout)
+
+        # Son Çeviri Kartı
         result_card = QWidget()
         result_card.setStyleSheet("background-color: #18181B; border: 1px solid #27272A; border-radius: 8px;")
         rc_layout = QVBoxLayout(result_card)
@@ -267,7 +400,7 @@ class MainWindow(QMainWindow):
         lbl_hdr.setStyleSheet("font-size: 11px; font-weight: 700; color: #A1A1AA; letter-spacing: 0.5px; border: none; background: transparent;")
         rc_layout.addWidget(lbl_hdr)
 
-        self.status_label = QLabel("Kısayola basıp ekran üzerinde çevrilecek alanı seçin.")
+        self.status_label = QLabel("Kısayola basıp (Alt+S) ekran alanı veya metin seçip (Alt+C) çevirin.")
         self.status_label.setStyleSheet("color: #71717A; font-size: 12px; border: none; background: transparent;")
         rc_layout.addWidget(self.status_label)
 
@@ -318,22 +451,162 @@ class MainWindow(QMainWindow):
         rc_layout.addLayout(action_layout)
         t_layout.addWidget(result_card)
 
-        # Sekme 2: Çeviri Geçmişi Tabı
+        # Sekme 2: Kelime Öğrenme & Anki Kartları Tabı
+        self.vocab_tab = VocabTab(self.vocab_service)
+
+        # Sekme 3: Çeviri Geçmişi Tabı
         self.history_tab = HistoryTab(self.history_service, self.tts_service)
 
-        # Sekme 3: Ayarlar Tabı
+        # Sekme 4: Ayarlar Tabı
         self.settings_tab = SettingsTab(self.settings_service)
 
         # Sekmeleri Ekle
         self.tabs.addTab(translation_panel, "🎯 Çeviri Paneli")
+        self.tabs.addTab(self.vocab_tab, "🎓 Kelime Kartları")
         self.tabs.addTab(self.history_tab, "📚 Geçmiş")
         self.tabs.addTab(self.settings_tab, "⚙️ Ayarlar")
 
         c_layout.addWidget(self.tabs)
         main_layout.addWidget(content_widget)
 
+    def setup_floating_widget(self):
+        show_floating = self.settings_service.get("show_floating_widget", True)
+        opacity = self.settings_service.get("floating_opacity", 90)
+
+        if self.floating_widget is None:
+            self.floating_widget = FloatingWidget(opacity=opacity)
+            self.floating_widget.capture_requested.connect(self.start_selection_safe)
+            self.floating_widget.selection_requested.connect(self.translate_selected_text_at_cursor)
+            self.floating_widget.live_requested.connect(self.start_live_selection)
+            self.floating_widget.settings_requested.connect(self.show_and_activate)
+
+            screen = QGuiApplication.primaryScreen()
+            avail_geo = screen.availableGeometry()
+            self.floating_widget.move(avail_geo.right() - 290, avail_geo.top() + 100)
+
+        if show_floating:
+            self.floating_widget.set_opacity_percent(opacity)
+            self.floating_widget.show()
+        else:
+            self.floating_widget.hide()
+
+    def on_settings_saved(self):
+        self.setup_shortcuts()
+        self.setup_pynput_hotkey()
+        self.setup_floating_widget()
+
+    def _cleanup_thread(self, thread_attr: str):
+        thread = getattr(self, thread_attr, None)
+        if thread is not None:
+            try:
+                if thread.isRunning():
+                    thread.requestInterruption()
+                    thread.quit()
+                    if not thread.wait(800):
+                        thread.terminate()
+            except Exception:
+                pass
+            setattr(self, thread_attr, None)
+
+    def translate_selected_text_at_cursor(self):
+        enable_sel = self.settings_service.get("enable_selection_translation", True)
+        if not enable_sel:
+            show_error_popup(self, "Seçili Metin Çevirisi Kapalı", "Bu özellik Ayarlar sekmesinden kapatılmıştır.")
+            return
+
+        selected_text = self.clipboard_service.capture_selected_text()
+        if not selected_text or not selected_text.strip():
+            self.status_label.setText("⚠️ Seçili metin bulunamadı. Lütfen önce metni fare ile seçin.")
+            self.status_label.setStyleSheet("color: #FFCC00; font-weight: bold;")
+            return
+
+        cursor_pos = QCursor.pos()
+        target_lang = self.settings_service.get("target_lang", "tr")
+        auto_detect = self.settings_service.get("auto_detect_src", True)
+
+        self._cleanup_thread('text_worker')
+        self.text_worker = TextTranslationWorkerThread(
+            selected_text, cursor_pos, self.translate_service,
+            target_lang=target_lang, auto_detect=auto_detect
+        )
+        self.text_worker.finished.connect(self.on_selected_text_translation_finished)
+        self.text_worker.error.connect(self.on_translation_error)
+        self.text_worker.start()
+
+    def on_selected_text_translation_finished(self, original_text: str, translated: str, src_lang: str, tgt_lang: str, cursor_pos: QPoint):
+        if self.settings_service.get("enable_context_ai", True):
+            translated = self.context_engine.adapt_translation(original_text, translated)
+
+        if self.settings_service.get("enable_vocab_builder", True):
+            self.vocab_service.add_word(original_text, translated, src_lang, tgt_lang)
+            self.vocab_tab.load_due_cards()
+            self.vocab_tab.load_vocab_table()
+
+        self.last_translated_text = translated
+        self.last_target_lang = tgt_lang
+        self._last_auto_clip = translated.strip()
+        self.history_service.add_item(original_text, translated, src_lang, tgt_lang)
+        self.history_tab.load_history()
+
+        if self.settings_service.get("auto_copy", True):
+            safe_set_clipboard(translated)
+
+        if self.settings_service.get("auto_tts", False):
+            self.tts_service.speak(translated, tgt_lang)
+
+        self.status_label.setText(f"✅ Seçili Metin Çevirisi Başarılı ({src_lang.upper()} ➔ {tgt_lang.upper()})")
+        self.status_label.setStyleSheet("color: #00FF88; font-weight: bold; font-size: 12px;")
+
+        display_content = f"【Seçili Metin ({src_lang.upper()})】:\n{original_text}\n\n【Çeviri ({tgt_lang.upper()})】:\n{translated}"
+        self.text_display.setText(display_content)
+
+        rect = QRect(cursor_pos.x(), cursor_pos.y(), 180, 40)
+        duration = self.settings_service.get("popup_duration", 0)
+
+        self._clear_active_popup()
+        self.active_popup = TranslationPopup(original_text, translated, src_lang, tgt_lang, rect, duration_sec=duration, is_text_selection=True)
+        self.active_popup.copy_requested.connect(lambda text: safe_set_clipboard(text))
+        self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
+        self.active_popup.show()
+
+    def on_clipboard_data_changed(self):
+        if not self.settings_service.get("auto_clipboard_translate", False):
+            return
+
+        now = time.time()
+        if now - getattr(self, '_last_clip_time', 0) < 1.5:
+            return
+        self._last_clip_time = now
+
+        if getattr(self, '_is_processing_clipboard', False):
+            return
+        self._is_processing_clipboard = True
+
+        try:
+            text = QApplication.clipboard().text()
+            if not text or not text.strip():
+                return
+
+            clean_text = text.strip()
+            if clean_text == getattr(self, '_last_auto_clip', '').strip() or clean_text == getattr(self, 'last_translated_text', '').strip():
+                return
+
+            self._last_auto_clip = clean_text
+            cursor_pos = QCursor.pos()
+            target_lang = self.settings_service.get("target_lang", "tr")
+            auto_detect = self.settings_service.get("auto_detect_src", True)
+
+            self._cleanup_thread('text_worker')
+            self.text_worker = TextTranslationWorkerThread(
+                clean_text, cursor_pos, self.translate_service,
+                target_lang=target_lang, auto_detect=auto_detect
+            )
+            self.text_worker.finished.connect(self.on_selected_text_translation_finished)
+            self.text_worker.start()
+        finally:
+            self._is_processing_clipboard = False
+
     def mousePressEvent(self, event):
-        """Frameless pencereyi fare ile sürükleyebilmek için mouse devralma."""
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
@@ -343,24 +616,16 @@ class MainWindow(QMainWindow):
             self.move(event.globalPosition().toPoint() - self._drag_pos)
             event.accept()
 
-        self.last_translated_text = ""
-        self.last_target_lang = "tr"
-
     def position_at_bottom_right(self):
-        """Pencereyi ekranın sağ alt köşesine (görev çubuğunun hemen üstüne) hizalar."""
         screen = QGuiApplication.primaryScreen()
         avail_geo = screen.availableGeometry()
-
         win_w = self.width()
         win_h = self.height()
-
         x = avail_geo.right() - win_w - 12
         y = avail_geo.bottom() - win_h - 12
-
         self.setGeometry(x, y, win_w, win_h)
 
     def changeEvent(self, event):
-        """Pencere odağını kaybettiğinde (dışarı tıklandığında) otomatik tepsye gizlenir."""
         if event.type() == QEvent.Type.ActivationChange:
             if not self.isActiveWindow():
                 if not QApplication.activeModalWidget():
@@ -368,43 +633,73 @@ class MainWindow(QMainWindow):
         super().changeEvent(event)
 
     def setup_shortcuts(self):
-        QShortcut(QKeySequence("Alt+S"), self, self.start_selection_safe)
-        QShortcut(QKeySequence("F8"), self, self.start_selection_safe)
-        QShortcut(QKeySequence("Ctrl+Alt+S"), self, self.start_selection_safe)
+        crop_preset = self.settings_service.get("hotkey_preset", "Alt+S")
+        sel_preset = self.settings_service.get("selection_translate_hotkey", "Alt+C")
+
+        if hasattr(self, '_shortcut_crop') and self._shortcut_crop:
+            try:
+                self._shortcut_crop.deleteLater()
+            except Exception:
+                pass
+        if hasattr(self, '_shortcut_sel') and self._shortcut_sel:
+            try:
+                self._shortcut_sel.deleteLater()
+            except Exception:
+                pass
+
+        self._shortcut_crop = QShortcut(QKeySequence(crop_preset), self, self.start_selection_safe)
+        self._shortcut_sel = QShortcut(QKeySequence(sel_preset), self, self.translate_selected_text_at_cursor)
+
+    def _clear_active_popup(self):
+        """Aktif popup nesnesini güvenli şekilde kapatır ve bellekten siler."""
+        if self.active_popup is not None:
+            try:
+                self.active_popup.close()
+                self.active_popup.deleteLater()
+            except Exception:
+                pass
+            self.active_popup = None
 
     def setup_pynput_hotkey(self):
-        self.hotkey_listener = PynputHotkeyListener()
-        self.hotkey_listener.triggered.connect(self.start_selection_safe)
-        self.hotkey_listener.start()
+        enable_hotkeys = self.settings_service.get("enable_hotkeys", True)
+        crop_preset = self.settings_service.get("hotkey_preset", "Alt+S")
+        sel_preset = self.settings_service.get("selection_translate_hotkey", "Alt+C")
+
+        if not hasattr(self, 'hotkey_listener'):
+            self.hotkey_listener = HotkeyManager()
+            self.hotkey_listener.triggered.connect(self.start_selection_safe)
+            self.hotkey_listener.selection_triggered.connect(self.translate_selected_text_at_cursor)
+
+        if enable_hotkeys:
+            self.hotkey_listener.start(crop_preset, sel_preset)
+        else:
+            self.hotkey_listener.stop()
 
     def start_selection_safe(self):
+        self.is_selecting_for_live = False
+        self.overlay.start_selection()
+
+    def start_live_selection(self):
+        enable_live = self.settings_service.get("enable_live_mode", True)
+        if not enable_live:
+            show_error_popup(self, "Canlı Mod Kapalı", "Canlı Çeviri özelliği Ayarlar sekmesinden kapatılmıştır.")
+            return
+
+        self.is_selecting_for_live = True
         self.overlay.start_selection()
 
     def setup_tray(self):
-        self.tray_icon = QSystemTrayIcon(create_app_icon(), self)
-        self.tray_icon.setToolTip("A.L.P. (Auto Language Parser)")
+        if not hasattr(self, 'tray_manager'):
+            self.tray_manager = TrayManager(self)
 
-        menu = QMenu()
-        show_action = QAction("Pencereyi Göster", self)
-        show_action.triggered.connect(self.show_and_activate)
-        menu.addAction(show_action)
+        self.tray_manager.setup_tray({
+            'show': self.show_and_activate,
+            'crop': self.start_selection_safe,
+            'selection': self.translate_selected_text_at_cursor,
+            'live': self.start_live_selection,
+            'quit': self.close_app
+        })
 
-        select_action = QAction("Seçim Yap (Alt+S / F8)", self)
-        select_action.triggered.connect(self.start_selection_safe)
-        menu.addAction(select_action)
-
-        menu.addSeparator()
-        quit_action = QAction("Çıkış", self)
-        quit_action.triggered.connect(self.close_app)
-        menu.addAction(quit_action)
-
-        self.tray_icon.setContextMenu(menu)
-        self.tray_icon.activated.connect(self.on_tray_activated)
-        self.tray_icon.show()
-
-    def on_tray_activated(self, reason):
-        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
-            self.show_and_activate()
 
     def show_and_activate(self):
         self.position_at_bottom_right()
@@ -422,36 +717,78 @@ class MainWindow(QMainWindow):
             self.status_label.setStyleSheet("color: #00FF88; font-weight: bold;")
 
     def on_area_selected(self, rect: QRect, physical_coords: tuple):
+        if self.is_selecting_for_live:
+            self.stop_live_mode()
+            self.live_overlay = LiveSubtitleOverlay(rect)
+            self.live_overlay.paused_toggled.connect(self.on_live_paused_toggled)
+            self.live_overlay.closed.connect(self.stop_live_mode)
+            self.live_overlay.show()
+
+            interval = self.settings_service.get("live_interval", 2.0)
+            skip_unchanged = self.settings_service.get("live_skip_unchanged", True)
+            target_lang = self.settings_service.get("target_lang", "tr")
+            auto_detect = self.settings_service.get("auto_detect_src", True)
+
+            self.live_thread = LiveTranslationWorkerThread(
+                rect, self.ocr_service, self.translate_service,
+                interval=interval, skip_unchanged=skip_unchanged,
+                target_lang=target_lang, auto_detect=auto_detect
+            )
+            self.live_thread.translation_updated.connect(self.on_live_translation_updated)
+            self.live_thread.start()
+
+            self.status_label.setText("🔴 Canlı Altyazı Çeviri Modu Aktif.")
+            self.status_label.setStyleSheet("color: #00E5FF; font-weight: bold; font-size: 12px;")
+            return
+
+        # Normal Tek Tık Ekran Çevirisi
         self.status_label.setText("⏳ Metin okunuyor ve çevriliyor...")
         self.status_label.setStyleSheet("color: #00E5FF; font-weight: bold; font-size: 12px;")
 
-        # Eski popup varsa kapat ve anlık yükleme göstergesini göster
-        if self.active_popup is not None:
-            try:
-                self.active_popup.close()
-                self.active_popup.deleteLater()
-            except Exception:
-                pass
-            self.active_popup = None
-
+        self._clear_active_popup()
         self.active_popup = LoadingPopup(rect)
         self.active_popup.show()
 
-        self.worker_thread = TranslationWorkerThread(rect, physical_coords, self.ocr_service, self.translate_service)
+        target_lang = self.settings_service.get("target_lang", "tr")
+        auto_detect = self.settings_service.get("auto_detect_src", True)
+
+        self._cleanup_thread('worker_thread')
+        self.worker_thread = TranslationWorkerThread(
+            rect, physical_coords, self.ocr_service, self.translate_service,
+            target_lang=target_lang, auto_detect=auto_detect
+        )
         self.worker_thread.finished.connect(self.on_translation_finished)
         self.worker_thread.error.connect(self.on_translation_error)
         self.worker_thread.start()
 
-    def on_translation_finished(self, ocr_text: str, translated: str, src_lang: str, tgt_lang: str, rect: QRect, physical_coords: tuple):
-        # Yükleme popup'ını kapat
-        if self.active_popup is not None:
+    def on_live_translation_updated(self, ocr_text: str, translated: str, src_lang: str, tgt_lang: str):
+        if self.live_overlay:
+            self.live_overlay.update_text(translated)
+
+        self.last_translated_text = translated
+        self.last_target_lang = tgt_lang
+        self.history_service.add_item(ocr_text, translated, src_lang, tgt_lang)
+        self.history_tab.load_history()
+
+    def on_live_paused_toggled(self, is_paused: bool):
+        if self.live_thread:
+            self.live_thread.set_paused(is_paused)
+
+    def stop_live_mode(self):
+        if self.live_thread:
+            self.live_thread.stop()
+            self.live_thread.wait(1000)
+            self.live_thread = None
+
+        if self.live_overlay:
             try:
-                self.active_popup.close()
-                self.active_popup.deleteLater()
+                self.live_overlay.close()
             except Exception:
                 pass
-            self.active_popup = None
+            self.live_overlay = None
 
+    def on_translation_finished(self, ocr_text: str, translated: str, src_lang: str, tgt_lang: str, rect: QRect, physical_coords: tuple):
+        self._clear_active_popup()
         if not ocr_text.strip():
             self.status_label.setText("⚠️ Okunabilir metin bulunamadı.")
             self.status_label.setStyleSheet("color: #FFCC00; font-weight: bold; font-size: 12px;")
@@ -460,7 +797,7 @@ class MainWindow(QMainWindow):
             show_error_popup(
                 self,
                 "Metin Okunamadı",
-                "Seçtiğiniz alanda okunabilir herhangi bir Türkçe veya İngilizce metin tespit edilemedi."
+                "Seçtiğiniz alanda okunabilir herhangi bir metin tespit edilemedi."
             )
             return
 
@@ -485,49 +822,42 @@ class MainWindow(QMainWindow):
         display_content = f"【Orijinal Metin ({src_lang.upper()})】:\n{ocr_text}\n\n【Çeviri ({tgt_lang.upper()})】:\n{translated}"
         self.text_display.setText(display_content)
 
-        print("\n" + "=" * 60)
-        print(f" [ÇEVİRİ SONUCU] ({src_lang.upper()} -> {tgt_lang.upper()})")
-        print(" -> Orijinal Metin:")
-        print(f"    {ocr_text}")
-        print(" -> Çeviri:")
-        print(f"    {translated}")
-        print("=" * 60 + "\n")
-        sys.stdout.flush()
-
-        duration = self.settings_service.get("popup_duration", 0)
-        self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
-        self.active_popup.copy_requested.connect(lambda text: QApplication.clipboard().setText(text))
-        self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
-        self.active_popup.show()
+        if self.settings_service.get("enable_in_place", True):
+            if self.in_place_overlay is not None:
+                try:
+                    self.in_place_overlay.close()
+                except Exception:
+                    pass
+            self.in_place_overlay = InPlaceOverlay(rect, translated)
+            self.in_place_overlay.show()
+        else:
+            duration = self.settings_service.get("popup_duration", 0)
+            self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
+            self.active_popup.copy_requested.connect(lambda text: safe_set_clipboard(text))
+            self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
+            self.active_popup.show()
 
     def on_translation_error(self, error_msg: str):
-        if self.active_popup is not None:
-            try:
-                self.active_popup.close()
-                self.active_popup.deleteLater()
-            except Exception:
-                pass
-            self.active_popup = None
-
+        self._clear_active_popup()
         self.status_label.setText(f"❌ Hata: {error_msg}")
         self.status_label.setStyleSheet("color: #FF6B6B; font-size: 12px;")
-        print(f"[HATA] {error_msg}")
-        sys.stdout.flush()
-
         show_error_popup(self, "Bağlantı / Çeviri Hatası", error_msg)
 
     def on_selection_cancelled(self):
+        self.is_selecting_for_live = False
         self.status_label.setText("Seçim iptal edildi (ESC tuşlandı veya alan çok küçük).")
         self.status_label.setStyleSheet("color: #FF6B6B; font-size: 12px;")
-        sys.stdout.flush()
 
     def closeEvent(self, event):
         event.ignore()
         self.hide()
 
     def close_app(self):
+        self.stop_live_mode()
         if hasattr(self, 'hotkey_listener'):
             self.hotkey_listener.stop()
+        if self.floating_widget:
+            self.floating_widget.close()
         QApplication.quit()
 
 
@@ -538,9 +868,9 @@ def main():
     window = MainWindow()
     window.hide()
 
-    window.tray_icon.showMessage(
+    window.tray_manager.show_message(
         "A.L.P. (Auto Language Parser)",
-        "Uygulama arka planda ve sistem tepsisinde aktif.\nKısayollar: Alt+S veya F8",
+        "Uygulama arka planda ve sistem tepsisinde aktif.\nKısayollar: Alt+S (Kırp) veya Alt+C (Seçili Metin)",
         QSystemTrayIcon.MessageIcon.Information,
         3000
     )

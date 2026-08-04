@@ -19,3 +19,8 @@ Thumbs.db
 python-installer.exe
 python-embed.zip
 get-pip.py
+
+# Local User Data
+data/*.json
+data/*.db
+

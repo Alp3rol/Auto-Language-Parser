@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="tr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>UtilityApp - Desktop Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-container": "#081828",
+                    "tertiary": "#b9c8de",
+                    "inverse-surface": "#d8e3fb",
+                    "on-tertiary-fixed": "#0d1c2d",
+                    "secondary-container": "#00a6e0",
+                    "on-error": "#690005",
+                    "surface-container-highest": "#2a3548",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "error": "#ffb4ab",
+                    "on-secondary-fixed-variant": "#004c69",
+                    "surface-container-high": "#1f2a3c",
+                    "primary-fixed-dim": "#bec6e0",
+                    "primary-container": "#0f172a",
+                    "inverse-primary": "#565e74",
+                    "primary-fixed": "#dae2fd",
+                    "on-tertiary-fixed-variant": "#39485a",
+                    "outline-variant": "#45464d",
+                    "surface-dim": "#081425",
+                    "on-primary-fixed": "#131b2e",
+                    "on-surface-variant": "#c6c6cd",
+                    "surface-container-low": "#111c2d",
+                    "on-secondary-fixed": "#001e2c",
+                    "surface": "#081425",
+                    "secondary": "#7bd0ff",
+                    "outline": "#909097",
+                    "inverse-on-surface": "#263143",
+                    "surface-tint": "#bec6e0",
+                    "surface-bright": "#2f3a4c",
+                    "on-surface": "#d8e3fb",
+                    "secondary-fixed": "#c4e7ff",
+                    "on-tertiary-container": "#738296",
+                    "background": "#081425",
+                    "secondary-fixed-dim": "#7bd0ff",
+                    "tertiary-fixed": "#d4e4fa",
+                    "on-background": "#d8e3fb",
+                    "surface-container-lowest": "#040e1f",
+                    "primary": "#bec6e0",
+                    "on-primary": "#283044",
+                    "surface-container": "#152031",
+                    "surface-variant": "#2a3548",
+                    "on-error-container": "#ffdad6",
+                    "on-secondary": "#00354a",
+                    "tertiary-fixed-dim": "#b9c8de",
+                    "on-primary-container": "#798098",
+                    "on-tertiary": "#233143",
+                    "error-container": "#93000a",
+                    "on-secondary-container": "#00374d"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "container-max-height": "480px",
+                    "compact-padding": "12px",
+                    "sidebar-width": "160px",
+                    "stack-gap": "4px",
+                    "gutter-xs": "8px"
+            },
+            "fontFamily": {
+                    "headline-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "label-md": ["Inter"],
+                    "label-xs": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-sm": ["16px", {"lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-md": ["13px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "body-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "label-xs": ["10px", {"lineHeight": "12px", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background: transparent;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .app-container {
+            width: 320px;
+            height: 380px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        .material-symbols-outlined {
+            font-size: 16px;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #45464d;
+            border-radius: 2px;
+        }
+        .glass-card {
+            background: rgba(31, 42, 60, 0.4);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(144, 144, 151, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-transparent dark">
+<div class="app-container flex flex-col bg-surface border border-outline-variant overflow-hidden rounded-lg">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center h-10 px-compact-padding w-full bg-surface-container-high border-b border-outline-variant z-20">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">UtilityApp</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-surface-variant transition-colors p-1 rounded cursor-pointer active:opacity-80">close</button>
+</div>
+</header>
+<!-- Top Navigation Tabs -->
+<nav class="flex w-full bg-surface-container-low border-b border-outline-variant shrink-0">
+<button class="flex-1 flex items-center justify-center gap-2 py-2 font-label-md text-label-md text-secondary border-b-2 border-secondary bg-surface-container-high transition-all" id="tab-settings" onclick="switchTab('settings')">
+<span class="material-symbols-outlined">settings</span>
+<span>Ayarlar</span>
+</button>
+<button class="flex-1 flex items-center justify-center gap-2 py-2 font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-highest transition-all" id="tab-language" onclick="switchTab('language')">
+<span class="material-symbols-outlined">language</span>
+<span>Dil</span>
+</button>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 bg-surface overflow-y-auto p-3" id="content-area">
+<!-- Combined Tab: Ayarlar & Kısayollar -->
+<section class="space-y-4" id="pane-settings">
+<div class="space-y-3">
+<div class="flex flex-col gap-1">
+<h2 class="font-label-md text-label-md font-bold text-on-surface uppercase tracking-wider">Genel Ayarlar</h2>
+</div>
+<div class="space-y-2">
+<!-- Toggle Item -->
+<div class="flex items-center justify-between glass-card rounded-lg p-2 group hover:bg-surface-variant transition-colors">
+<span class="font-label-md text-label-md text-on-surface">Başlangıçta çalıştır</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-8 h-4 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-secondary"></div>
+</label>
+</div>
+</div>
+<div class="pt-2 flex flex-col gap-1 border-t border-outline-variant">
+<h2 class="font-label-md text-label-md font-bold text-on-surface uppercase tracking-wider mt-2">Kısayol Tuşları</h2>
+</div>
+<div class="space-y-3">
+<div class="space-y-1">
+<label class="font-label-md text-[11px] text-on-surface-variant px-1">Açılış Kısayolu</label>
+<div class="relative">
+<input class="w-full h-8 bg-surface-container-lowest border border-outline-variant rounded px-3 font-label-md text-label-md text-secondary focus:ring-1 focus:ring-secondary focus:outline-none cursor-default" readonly="" type="text" value="Ctrl + Shift + O"/>
+<span class="absolute right-2 top-1.5 material-symbols-outlined text-on-surface-variant opacity-50">keyboard</span>
+</div>
+</div>
+<div class="p-2 bg-tertiary-container rounded border border-on-tertiary-fixed-variant">
+<div class="flex items-start gap-2">
+<span class="material-symbols-outlined text-tertiary mt-0.5">help</span>
+<span class="font-body-sm text-[11px] leading-tight text-tertiary">Kısayolu değiştirmek için kutuya tıklayın ve yeni tuş kombinasyonuna basın.</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Tab Content: Dil (Hidden by default) -->
+<section class="hidden space-y-3" id="pane-language">
+<div class="flex flex-col gap-1">
+<h2 class="font-label-md text-label-md font-bold text-on-surface uppercase tracking-wider">Dil Seçimi</h2>
+</div>
+<div class="space-y-1">
+<!-- Lang Item 1 -->
+<div class="flex items-center justify-between p-2 bg-surface-container-high border-l-2 border-secondary rounded-r group cursor-pointer">
+<div class="flex items-center gap-3">
+<div class="w-5 h-3 bg-slate-800 rounded-sm overflow-hidden flex items-center justify-center border border-outline-variant">
+<span class="text-[7px] font-bold text-white">TR</span>
+</div>
+<span class="font-label-md text-label-md text-secondary">Türkçe</span>
+</div>
+<span class="material-symbols-outlined text-secondary">check_circle</span>
+</div>
+<!-- Lang Item 2 -->
+<div class="flex items-center justify-between p-2 hover:bg-surface-container-highest transition-colors rounded group cursor-pointer">
+<div class="flex items-center gap-3">
+<div class="w-5 h-3 bg-slate-800 rounded-sm overflow-hidden flex items-center justify-center border border-outline-variant">
+<span class="text-[7px] font-bold text-white">EN</span>
+</div>
+<span class="font-label-md text-label-md text-on-surface-variant group-hover:text-on-surface">English</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer Actions -->
+<footer class="border-t border-outline-variant px-compact-padding flex items-center justify-end gap-2 shrink-0 bg-surface-container-low h-10">
+<button class="px-3 py-1 font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer">İptal</button>
+<button class="px-4 py-1 font-label-md text-label-md bg-secondary text-on-secondary-container rounded font-semibold active:scale-95 transition-all shadow-sm">Kaydet</button>
+</footer>
+</div>
+<script>
+        function switchTab(tabName) {
+            const panes = ['settings', 'language'];
+            panes.forEach(pane => {
+                document.getElementById(`pane-${pane}`).classList.add('hidden');
+                
+                const btn = document.getElementById(`tab-${pane}`);
+                btn.className = "flex-1 flex items-center justify-center gap-2 py-2 font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-highest transition-all";
+            });
+
+            document.getElementById(`pane-${tabName}`).classList.remove('hidden');
+            
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            activeBtn.className = "flex-1 flex items-center justify-center gap-2 py-2 font-label-md text-label-md text-secondary border-b-2 border-secondary bg-surface-container-high transition-all";
+        }
+    </script>
+</body></html>
