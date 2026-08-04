@@ -1,3 +1,4 @@
+import keyboard
 from pynput import keyboard as pynput_keyboard
 from PySide6.QtCore import QObject, Signal
 
@@ -32,7 +33,8 @@ def to_pynput_format(shortcut_str: str) -> str:
 
 class HotkeyManager(QObject):
     """
-    Windows genelinde (Global) klavye tuş dinleme sağlayan pynput yöneticisi.
+    Windows genelinde (Global) klavye tuş dinleme sağlayan hibrit kısayol yöneticisi.
+    'keyboard' kütüphanesini birincil (Windows low-level hook), 'pynput' kütüphanesini yedek olarak kullanır.
     """
 
     triggered = Signal()
@@ -41,6 +43,7 @@ class HotkeyManager(QObject):
     def __init__(self):
         super().__init__()
         self.listener = None
+        self.keyboard_hooks = []
 
     def start(
         self, crop_preset: str = "Alt+S", selection_preset: str = "Alt+C"
@@ -57,6 +60,19 @@ class HotkeyManager(QObject):
             )
             self.selection_triggered.emit()
 
+        # 1. Birincil Yöntem: 'keyboard' kütüphanesi (Windows low-level hook, Alt+Q, Alt+S, F8 vb. %100 kararlı)
+        try:
+            hk1 = keyboard.add_hotkey(crop_preset.lower().strip(), on_crop, suppress=False)
+            hk2 = keyboard.add_hotkey(selection_preset.lower().strip(), on_selection, suppress=False)
+            self.keyboard_hooks.extend([crop_preset.lower().strip(), selection_preset.lower().strip()])
+            print(
+                f"[BAŞARILI] Global Kısayol Dinleyicisi Aktif ({crop_preset}, {selection_preset})"
+            )
+            return
+        except Exception as ke:
+            print(f"[UYARI] 'keyboard' kısayol dinleyicisi başlatılamadı, pynput deneniyor: {ke}")
+
+        # 2. Yedek Yöntem: 'pynput' kütüphanesi
         crop_pynput = to_pynput_format(crop_preset)
         sel_pynput = to_pynput_format(selection_preset)
 
@@ -74,6 +90,14 @@ class HotkeyManager(QObject):
             )
 
     def stop(self):
+        if self.keyboard_hooks:
+            for hk in self.keyboard_hooks:
+                try:
+                    keyboard.remove_hotkey(hk)
+                except Exception:
+                    pass
+            self.keyboard_hooks.clear()
+
         if self.listener:
             try:
                 self.listener.stop()
