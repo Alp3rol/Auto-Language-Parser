@@ -860,7 +860,8 @@ class MainWindow(QMainWindow):
         display_content = f"【Orijinal Metin ({src_lang.upper()})】:\n{ocr_text}\n\n【Çeviri ({tgt_lang.upper()})】:\n{translated}"
         self.text_display.setText(display_content)
 
-        if self.settings_service.get("enable_radial_menu", True):
+        # Eğer Kullanıcı Radial (Dairesel) Menüyü Açtıysa SADECE Dairesel Menüyü Göster (Çakışmayı önle)
+        if self.settings_service.get("enable_radial_menu", False):
             if hasattr(self, 'radial_menu') and self.radial_menu:
                 try:
                     self.radial_menu.close()
@@ -871,7 +872,9 @@ class MainWindow(QMainWindow):
                 lambda act: self.handle_radial_action(act, ocr_text, translated, src_lang, tgt_lang, rect)
             )
             self.radial_menu.show_at_position(rect.center())
+            return
 
+        # Varsayılan Akış: In-Place veya Sade Premium Popup Gösterimi
         if self.settings_service.get("enable_in_place", True):
             if self.in_place_overlay is not None:
                 try:
@@ -882,6 +885,7 @@ class MainWindow(QMainWindow):
             self.in_place_overlay.show()
         else:
             duration = self.settings_service.get("popup_duration", 0)
+            self._clear_active_popup()
             self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
             self.active_popup.copy_requested.connect(lambda text: safe_set_clipboard(text))
             self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))

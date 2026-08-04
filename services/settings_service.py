@@ -30,7 +30,7 @@ class SettingsService:
         "hover_delay_ms": 400,
         "enable_vocab_builder": True,
         "ocr_engine": "auto",
-        "enable_radial_menu": True,
+        "enable_radial_menu": False,
         "enable_hover_lookup": True
     }
 
