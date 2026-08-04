@@ -782,6 +782,8 @@ class MainWindow(QMainWindow):
         self.status_label.setText("⏳ Metin okunuyor ve çevriliyor...")
         self.status_label.setStyleSheet("color: #00E5FF; font-weight: bold; font-size: 12px;")
 
+        self.last_cropped_img = capture_screen_area(rect)
+
         self._clear_active_popup()
         self.active_popup = LoadingPopup(rect)
         self.active_popup.show()
@@ -874,23 +876,30 @@ class MainWindow(QMainWindow):
             self.radial_menu.show_at_position(rect.center())
             return
 
-        # Varsayılan Akış: In-Place veya Sade Premium Popup Gösterimi
-        if self.settings_service.get("enable_in_place", True):
+        # Varsayılan Akış: In-Place (Yerinde Çeviri) veya Sade Premium Popup Gösterimi
+        if self.settings_service.get("enable_in_place", False):
             if self.in_place_overlay is not None:
                 try:
                     self.in_place_overlay.close()
                 except Exception:
                     pass
-            self.in_place_overlay = InPlaceOverlay(rect, translated)
+            self.in_place_overlay = InPlaceOverlay(rect, translated, pil_image=getattr(self, 'last_cropped_img', None))
+            self.in_place_overlay.details_requested.connect(
+                lambda text, r: self.show_translation_popup(ocr_text, text, src_lang, tgt_lang, r)
+            )
             self.in_place_overlay.show()
         else:
-            duration = self.settings_service.get("popup_duration", 0)
-            self._clear_active_popup()
-            self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
-            self.active_popup.copy_requested.connect(lambda text: safe_set_clipboard(text))
-            self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
-            self.active_popup.ai_action_requested.connect(self.on_ai_action_requested)
-            self.active_popup.show()
+            self.show_translation_popup(ocr_text, translated, src_lang, tgt_lang, rect)
+
+    def show_translation_popup(self, ocr_text: str, translated: str, src_lang: str, tgt_lang: str, rect: QRect):
+        """Detaylı çeviri popup kartını gösterir."""
+        duration = self.settings_service.get("popup_duration", 0)
+        self._clear_active_popup()
+        self.active_popup = TranslationPopup(ocr_text, translated, src_lang, tgt_lang, rect, duration_sec=duration)
+        self.active_popup.copy_requested.connect(lambda text: safe_set_clipboard(text))
+        self.active_popup.speak_requested.connect(lambda text, lang: self.tts_service.speak(text, lang))
+        self.active_popup.ai_action_requested.connect(self.on_ai_action_requested)
+        self.active_popup.show()
 
     def handle_radial_action(self, action_key: str, ocr_text: str, translated: str, src_lang: str, tgt_lang: str, rect: QRect):
         """Radial Menü üzerindeki dairesel buton aksiyonlarını yürütür."""

@@ -465,7 +465,8 @@ class SettingsTab(QWidget):
         cng_layout.setContentsMargins(12, 10, 12, 10)
         cng_layout.setSpacing(10)
 
-        self.chk_enable_in_place = QCheckBox("🖼️ Metnin Yerinde Değiştirilmesi (In-Place Overwrite)")
+        self.chk_enable_in_place = QCheckBox("🎯 Gerçek Yerinde Metin Değiştirme (True In-Place AR Screen Overlay)")
+        self.chk_enable_in_place.setToolTip("Çeviriyi ayrı popup kartı yerine doğrudan orijinal ekran yazısının üstünde gösterir (Google Lens tarzı).")
         self.chk_enable_in_place.setObjectName("stitchToggle")
         cng_layout.addWidget(self.chk_enable_in_place)
 
