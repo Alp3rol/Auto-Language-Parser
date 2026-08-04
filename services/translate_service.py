@@ -164,27 +164,3 @@ class TranslationService:
                 continue
 
         raise ConnectionError("İnternet bağlantısı bulunamadı veya çeviri sunucularına ulaşılamadı.")
-
-    def translate_structured_blocks(self, blocks: list, target_lang: str = "tr", auto_detect: bool = True) -> list:
-        """
-        Her bir OCR bloğunu (başlık, paragraf vb.) bağımsız olarak çevirerek yapısal hiyerarşiyi ve konumları korur.
-        """
-        if not blocks:
-            return []
-
-        translated_blocks = []
-        for b in blocks:
-            orig_text = b.get("text", "").strip()
-            if not orig_text:
-                continue
-
-            try:
-                trans_text, src_lang, tgt_lang = self.translate(orig_text, target_lang=target_lang, auto_detect=auto_detect)
-            except Exception:
-                trans_text = orig_text
-
-            block_copy = dict(b)
-            block_copy["translated_text"] = trans_text
-            translated_blocks.append(block_copy)
-
-        return translated_blocks

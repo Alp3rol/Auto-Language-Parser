@@ -50,7 +50,7 @@ def safe_set_clipboard(text: str):
 
 class TranslationWorkerThread(QThread):
     """Ekran kırpma, OCR ve Çeviri adımlarını arka plan thread'inde çalıştıran işçi sınıfı."""
-    finished = Signal(str, str, str, str, QRect, tuple, list)
+    finished = Signal(str, str, str, str, QRect, tuple)
     error = Signal(str)
 
     def __init__(self, rect: QRect, physical_coords: tuple, ocr_service: OCRService,
@@ -70,20 +70,13 @@ class TranslationWorkerThread(QThread):
             ocr_text = self.ocr_service.extract_text(pil_img, engine=self.ocr_engine)
 
             if not ocr_text or not ocr_text.strip():
-                self.finished.emit("", "", "auto", self.target_lang, self.rect, self.physical_coords, [])
+                self.finished.emit("", "", "auto", self.target_lang, self.rect, self.physical_coords)
                 return
-
-            raw_blocks = self.ocr_service.extract_structured_blocks(pil_img)
-            translated_blocks = []
-            if raw_blocks:
-                translated_blocks = self.translate_service.translate_structured_blocks(
-                    raw_blocks, target_lang=self.target_lang, auto_detect=self.auto_detect
-                )
 
             translated, src_lang, tgt_lang = self.translate_service.translate(
                 ocr_text, target_lang=self.target_lang, auto_detect=self.auto_detect
             )
-            self.finished.emit(ocr_text, translated, src_lang, tgt_lang, self.rect, self.physical_coords, translated_blocks)
+            self.finished.emit(ocr_text, translated, src_lang, tgt_lang, self.rect, self.physical_coords)
 
         except ConnectionError as ce:
             self.error.emit(str(ce))
@@ -834,7 +827,7 @@ class MainWindow(QMainWindow):
                 pass
             self.live_overlay = None
 
-    def on_translation_finished(self, ocr_text: str, translated: str, src_lang: str, tgt_lang: str, rect: QRect, physical_coords: tuple, structured_blocks: list = None):
+    def on_translation_finished(self, ocr_text: str, translated: str, src_lang: str, tgt_lang: str, rect: QRect, physical_coords: tuple):
         self._clear_active_popup()
         if not ocr_text.strip():
             self.status_label.setText("⚠️ Okunabilir metin bulunamadı.")
@@ -891,7 +884,7 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
             self.in_place_overlay = InPlaceOverlay(
-                rect, translated, pil_image=getattr(self, 'last_cropped_img', None), structured_blocks=structured_blocks
+                rect, translated, pil_image=getattr(self, 'last_cropped_img', None)
             )
             self.in_place_overlay.details_requested.connect(
                 lambda text, r: self.show_translation_popup(ocr_text, text, src_lang, tgt_lang, r)
